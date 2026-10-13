@@ -1,0 +1,59 @@
+/* ===== 全局样式 / 主题变量 ===== */
+:root {
+  --color-primary: #21557b;
+  --color-primary-light: #edf5fa;
+  --color-accent: #1a537f;
+  --color-text: #2c3e50;
+  --color-text-light: #627484;
+  --color-border: #e0e7ee;
+  --color-bg: #f4f8fb;
+  --color-white: #ffffff;
+  --radius: 12px;
+  --shadow: 0 2px 12px rgba(33, 85, 123, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* 通用容器 */
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 48px;
+  width: 100%;
+}
+
+/* 响应式：手机优先 */
+@media (min-width: 768px) {
+  .page {
+    padding: 32px 24px 64px;
+  }
+}
