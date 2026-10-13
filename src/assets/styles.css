@@ -1,15 +1,19 @@
-/* ===== 全局样式 / 主题变量 ===== */
+/* ===== 全局样式 / 主题变量（Keep 风格 · 校园跑蓝） ===== */
 :root {
-  --color-primary: #21557b;
-  --color-primary-light: #edf5fa;
-  --color-accent: #1a537f;
-  --color-text: #2c3e50;
-  --color-text-light: #627484;
-  --color-border: #e0e7ee;
-  --color-bg: #f4f8fb;
+  --color-primary: #2e6bff;
+  --color-primary-dark: #1e4fd8;
+  --color-primary-light: #eaf1ff;
+  --color-accent: #22c55e;
+  --color-danger: #ff5a3c;
+  --color-dark: #1b2a4a;
+  --color-text: #17233d;
+  --color-text-light: #8a94a6;
+  --color-border: #edf0f5;
+  --color-bg: #f2f4f8;
   --color-white: #ffffff;
-  --radius: 12px;
-  --shadow: 0 2px 12px rgba(33, 85, 123, 0.08);
+  --radius: 16px;
+  --shadow: 0 2px 12px rgba(23, 35, 61, 0.06);
+  --tabbar-h: 60px;
 }
 
 * {
@@ -43,17 +47,98 @@ button {
   font-family: inherit;
 }
 
-/* 通用容器 */
+/* 通用容器（底部预留 TabBar 空间） */
 .page {
-  max-width: 720px;
+  max-width: 520px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 20px 16px calc(var(--tabbar-h) + 40px);
   width: 100%;
+}
+
+/* 通用卡片 */
+.card {
+  background: var(--color-white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+/* 区块标题行 */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 2px 12px;
+}
+.section-head h3 {
+  font-size: 17px;
+  font-weight: 700;
+}
+.section-head .more {
+  font-size: 13px;
+  color: var(--color-text-light);
+}
+
+/* 筛选 chips */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-white);
+  color: var(--color-text-light);
+  font-size: 13px;
+  box-shadow: var(--shadow);
+}
+.chip.active {
+  background: var(--color-dark);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* 顶部标签页（下划线式） */
+.tabs {
+  display: flex;
+  gap: 22px;
+  align-items: baseline;
+}
+.tab-item {
+  font-size: 15px;
+  color: var(--color-text-light);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  position: relative;
+}
+.tab-item.active {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
 }
 
 /* 响应式：手机优先 */
 @media (min-width: 768px) {
   .page {
-    padding: 32px 24px 64px;
+    padding: 28px 24px calc(var(--tabbar-h) + 48px);
   }
 }

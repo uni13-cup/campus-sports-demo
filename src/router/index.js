@@ -6,8 +6,41 @@ import { createRouter, createWebHistory } from 'vue-router'
  * - 新增路由请与李金燚统一确认后再注册
  */
 const routes = [
+  { path: '/', redirect: '/courses' },
+  // —— 五 Tab 主结构（Keep 风格改版，李金燚负责） ——
   {
-    path: '/',
+    path: '/courses',
+    name: 'courses',
+    component: () => import('@/views/courses/CoursesView.vue'),
+    meta: { title: '课程', tab: true }
+  },
+  {
+    path: '/schedule',
+    name: 'schedule',
+    component: () => import('@/views/schedule/ScheduleView.vue'),
+    meta: { title: '日程', tab: true }
+  },
+  {
+    path: '/exercise',
+    name: 'exercise',
+    component: () => import('@/views/exercise/ExerciseView.vue'),
+    meta: { title: '运动', tab: true }
+  },
+  {
+    path: '/discover',
+    name: 'discover',
+    component: () => import('@/views/discover/DiscoverView.vue'),
+    meta: { title: '发现', tab: true }
+  },
+  {
+    path: '/profile',
+    name: 'profile',
+    component: () => import('@/views/profile/ProfileView.vue'),
+    meta: { title: '我的', tab: true }
+  },
+  // 旧首页保留（李浩阳），可从各详情页返回
+  {
+    path: '/home',
     name: 'home',
     component: () => import('@/views/home/HomeView.vue'),
     meta: { title: '校园运动平台' }

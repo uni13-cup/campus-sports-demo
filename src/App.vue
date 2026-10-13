@@ -1,10 +1,17 @@
 <script setup>
-// 根组件：仅承载路由出口，具体内容由各页面组件实现
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
+import TabBar from '@/components/TabBar.vue'
+
+// 根组件：路由出口 + 五个主 Tab 页面显示底部导航
+const route = useRoute()
+const showTabBar = computed(() => route.meta?.tab === true)
 </script>
 
 <template>
   <div id="layout">
     <router-view />
+    <TabBar v-if="showTabBar" />
   </div>
 </template>
 
