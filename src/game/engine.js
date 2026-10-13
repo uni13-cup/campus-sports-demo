@@ -2,8 +2,7 @@
  * 校园猫鼠大作战 · 游戏引擎
  *
  * 负责人：张慧雯（游戏核心逻辑）
- * 说明：本文件为【接口约定 + 临时 mock 实现】，供李金燚开发页面时联调用。
- *      张慧雯确认正式接口后可整体替换实现，但请保持导出函数名与返回结构一致。
+ * 说明：本文件提供可独立测试的二维虚拟坐标逻辑，并暂时兼容现有页面调用。
  *      其他人请勿修改本文件的判定逻辑。
  *
  * 临时实现使用模拟二维坐标，不依赖 DOM，可独立测试。
@@ -15,11 +14,10 @@ import { GAME_CONFIG } from './config.js'
 /**
  * 游戏状态结构
  * @typedef {Object} GameState
- * @property {string} status       - 'idle' | 'running' | 'caught' | 'timeout'
- * @property {{x:number,y:number}} cat   - 猫的位置
- * @property {{x:number,y:number}} mouse  - 鼠的位置
- * @property {number} distance     - 猫鼠直线距离（米）
- * @property {number} timeLeft     - 剩余时间（秒）
+ * @property {'hiding'|'chasing'|'ended'} phase
+ * @property {Array<Object>} players
+ * @property {number} hidingTimeLeft
+ * @property {number} chasingTimeLeft
  * @property {string|null} winner  - 'cat' | 'mouse' | null
  */
 
@@ -36,31 +34,44 @@ export function initGame(opts = {}) {
   clearTimer()
   const cfg = { ...GAME_CONFIG, ...opts }
   state = {
-    status: 'running',
-    cat: { x: Math.round(cfg.mapWidth * 0.2), y: Math.round(cfg.mapHeight / 2) },
-    mouse: { x: Math.round(cfg.mapWidth * 0.8), y: Math.round(cfg.mapHeight / 2) },
-    distance: 0,
-    timeLeft: cfg.duration,
-    winner: null
+    phase: 'hiding',
+    players: createPlayers(cfg),
+    hidingTimeLeft: cfg.hidingDuration,
+    chasingTimeLeft: cfg.chasingDuration,
+    winner: null,
+    endReason: null,
+    config: {
+      mapWidth: cfg.mapWidth,
+      mapHeight: cfg.mapHeight,
+      catchThreshold: cfg.catchThreshold,
+      moveStep: cfg.moveStep,
+      obstacles: cfg.obstacles.map((obstacle) => ({ ...obstacle }))
+    }
   }
-  state.distance = calcDistance(state.cat, state.mouse)
+  addLegacyFields(state)
   return getState()
 }
 
 /**
  * 移动角色（临时实现：随机走一步，并夹在地图范围内）
- * @param {'cat'|'mouse'} who
+ * 新接口：moveCharacter(state, playerId, delta) 返回新状态，不修改传入状态。
+ * 兼容接口：moveCharacter('cat'|'mouse', delta) 更新模块内状态。
+ * @param {GameState|'cat'|'mouse'} stateOrWho
+ * @param {string|{dx:number,dy:number}} playerIdOrDelta
  * @param {{dx:number,dy:number}} delta
  * @returns {GameState}
  */
-export function moveCharacter(who, delta) {
-  if (!state || state.status !== 'running') return getState()
-  const cfg = GAME_CONFIG
-  const target = state[who]
-  target.x = clamp(target.x + delta.dx, 0, cfg.mapWidth)
-  target.y = clamp(target.y + delta.dy, 0, cfg.mapHeight)
-  state.distance = calcDistance(state.cat, state.mouse)
-  checkCatch()
+export function moveCharacter(stateOrWho, playerIdOrDelta, delta) {
+  if (isGameState(stateOrWho)) {
+    const movedState = movePlayerInState(stateOrWho, playerIdOrDelta, delta)
+    return checkCaptures(movedState).state
+  }
+
+  if (!state || state.phase === 'ended') return getState()
+  const playerId = resolveLegacyPlayerId(stateOrWho)
+  state = movePlayerInState(state, playerId, playerIdOrDelta)
+  state = checkCaptures(state).state
+  if (state.phase === 'ended') clearTimer()
   return getState()
 }
 
@@ -69,15 +80,48 @@ export function moveCharacter(who, delta) {
  * @returns {GameState}
  */
 export function tick() {
-  if (!state || state.status !== 'running') return getState()
-  state.timeLeft -= 1
-  if (state.timeLeft <= 0) {
-    state.timeLeft = 0
-    state.status = 'timeout'
-    state.winner = 'mouse'
-    clearTimer()
-  }
+  if (!state || state.phase === 'ended') return getState()
+  state = tickGame(state, 1)
+  if (state.phase === 'ended') clearTimer()
   return getState()
+}
+
+/**
+ * 推进游戏计时；可一次推进多秒，并正确跨越躲藏与追捕阶段。
+ * @param {GameState} gameState
+ * @param {number} [deltaSeconds]
+ * @returns {GameState}
+ */
+export function tickGame(gameState, deltaSeconds = 1) {
+  if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
+    throw new TypeError('deltaSeconds must be a non-negative finite number')
+  }
+
+  const nextState = clone(gameState)
+  if (nextState.phase === 'ended' || deltaSeconds === 0) return nextState
+
+  let remaining = deltaSeconds
+  if (nextState.phase === 'hiding') {
+    const hidingElapsed = Math.min(nextState.hidingTimeLeft, remaining)
+    nextState.hidingTimeLeft -= hidingElapsed
+    remaining -= hidingElapsed
+    if (nextState.hidingTimeLeft === 0) nextState.phase = 'chasing'
+  }
+
+  if (nextState.phase === 'chasing' && remaining > 0) {
+    nextState.chasingTimeLeft = Math.max(
+      0,
+      nextState.chasingTimeLeft - remaining
+    )
+    if (nextState.chasingTimeLeft === 0) {
+      nextState.phase = 'ended'
+      nextState.winner = 'mouse'
+      nextState.endReason = 'timeout'
+    }
+  }
+
+  addLegacyFields(nextState)
+  return nextState
 }
 
 /**
@@ -87,7 +131,125 @@ export function tick() {
  * @returns {number}
  */
 export function calcDistance(a, b) {
-  return Math.round(Math.hypot(a.x - b.x, a.y - b.y))
+  return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+/**
+ * 判断虚拟坐标是否位于地图内且不在建筑障碍物中。
+ * @param {{x:number,y:number}} position
+ * @param {Object} [config]
+ * @returns {boolean}
+ */
+export function isWalkablePosition(position, config = GAME_CONFIG) {
+  if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+    return false
+  }
+  if (
+    position.x < 0 ||
+    position.x > config.mapWidth ||
+    position.y < 0 ||
+    position.y > config.mapHeight
+  ) {
+    return false
+  }
+
+  return !(config.obstacles ?? []).some((obstacle) =>
+    position.x >= obstacle.x &&
+    position.x <= obstacle.x + obstacle.width &&
+    position.y >= obstacle.y &&
+    position.y <= obstacle.y + obstacle.height
+  )
+}
+
+/**
+ * 检查全部现有猫与存活鼠之间的距离，并将被抓的鼠转为电脑猫。
+ * 本次检查中新转化的猫从下一次更新开始参与抓捕，避免同一帧连锁抓捕。
+ * @param {GameState} gameState
+ * @returns {{state: GameState, captures: Array<Object>}}
+ */
+export function checkCaptures(gameState) {
+  const nextState = clone(gameState)
+  const captures = []
+  if (nextState.phase !== 'chasing') return { state: nextState, captures }
+
+  const cats = nextState.players.filter((player) => player.role === 'cat')
+  const mice = nextState.players.filter((player) => player.role === 'mouse')
+
+  for (const mouse of mice) {
+    const catcher = cats
+      .map((cat) => ({
+        cat,
+        distance: calcDistance(cat.position, mouse.position)
+      }))
+      .filter(({ distance }) => distance <= nextState.config.catchThreshold)
+      .sort((left, right) => left.distance - right.distance)[0]
+
+    if (!catcher) continue
+
+    const mutableMouse = nextState.players.find((player) => player.id === mouse.id)
+    const mutableCat = nextState.players.find(
+      (player) => player.id === catcher.cat.id
+    )
+    mutableMouse.role = 'cat'
+    mutableMouse.controller = 'ai'
+    mutableMouse.capturedAt = nextState.chasingTimeLeft
+    mutableMouse.captures = 0
+    mutableCat.captures = (mutableCat.captures ?? 0) + 1
+    captures.push({
+      catId: mutableCat.id,
+      mouseId: mutableMouse.id,
+      distance: catcher.distance
+    })
+  }
+
+  if (!nextState.players.some((player) => player.role === 'mouse')) {
+    nextState.phase = 'ended'
+    nextState.winner = 'cat'
+    nextState.endReason = 'all-mice-caught'
+  }
+  addLegacyFields(nextState)
+  return { state: nextState, captures }
+}
+
+/**
+ * 推进一帧电脑角色移动。
+ * 躲藏阶段电脑鼠随机分散；追捕阶段鼠远离最近的猫，电脑猫追逐最近的鼠。
+ * 不传 gameState 时更新模块内状态，供现有页面直接调用。
+ * @param {GameState} [gameState]
+ * @param {Function} [random]
+ * @returns {GameState}
+ */
+export function updateAi(gameState, random = Math.random) {
+  if (typeof random !== 'function') throw new TypeError('random must be a function')
+
+  const updatesModuleState = gameState === undefined
+  if (updatesModuleState) gameState = state
+  if (!gameState) return null
+
+  let nextState = clone(gameState)
+  if (nextState.phase === 'ended') return nextState
+
+  const aiPlayerIds = nextState.players
+    .filter((player) => player.controller === 'ai')
+    .map((player) => player.id)
+
+  for (const playerId of aiPlayerIds) {
+    const player = nextState.players.find((item) => item.id === playerId)
+    if (!player) continue
+
+    const delta = getAiDelta(nextState, player, random)
+    if (!delta) continue
+    moveAiPlayer(nextState, player, delta)
+  }
+
+  addLegacyFields(nextState)
+  nextState = checkCaptures(nextState).state
+  if (updatesModuleState) {
+    state = nextState
+    if (state.phase === 'ended') clearTimer()
+    return getState()
+  }
+  return nextState
 }
 
 /**
@@ -95,14 +257,11 @@ export function calcDistance(a, b) {
  * @returns {boolean}
  */
 export function checkCatch() {
-  if (!state || state.status !== 'running') return false
-  if (state.distance <= GAME_CONFIG.catchThreshold) {
-    state.status = 'caught'
-    state.winner = 'cat'
-    clearTimer()
-    return true
-  }
-  return false
+  if (!state || state.phase !== 'chasing') return false
+  const result = checkCaptures(state)
+  state = result.state
+  if (state.phase === 'ended') clearTimer()
+  return result.captures.length > 0
 }
 
 /**
@@ -110,9 +269,11 @@ export function checkCatch() {
  * @returns {GameState}
  */
 export function endGame() {
-  if (state && state.status === 'running') {
-    state.status = 'timeout'
+  if (state && state.phase !== 'ended') {
+    state.phase = 'ended'
     state.winner = 'mouse'
+    state.endReason = 'manual'
+    addLegacyFields(state)
   }
   clearTimer()
   return getState()
@@ -122,10 +283,9 @@ export function endGame() {
  * 重置游戏（回到未开始状态）
  * @returns {GameState}
  */
-export function resetGame() {
+export function resetGame(opts = {}) {
   clearTimer()
-  state = null
-  return getState()
+  return initGame(opts)
 }
 
 /**
@@ -162,4 +322,167 @@ export function clearTimer() {
 /* ===== 工具函数 ===== */
 function clamp(v, min, max) {
   return Math.max(min, Math.min(max, v))
+}
+
+function createPlayers(cfg) {
+  const catSpawn = cfg.spawnPoints.cat
+  const players = [
+    {
+      id: 'cat-1',
+      role: 'cat',
+      controller: 'human',
+      position: { x: catSpawn.x, y: catSpawn.y },
+      spawnLandmark: catSpawn.landmark,
+      captures: 0
+    }
+  ]
+
+  for (let index = 0; index < cfg.mouseCount; index += 1) {
+    const spawn = cfg.spawnPoints.mice[index]
+    if (!spawn) throw new RangeError(`Missing spawn point for mouse-${index + 1}`)
+    players.push({
+      id: `mouse-${index + 1}`,
+      role: 'mouse',
+      controller: 'ai',
+      position: { x: spawn.x, y: spawn.y },
+      spawnLandmark: spawn.landmark,
+      capturedAt: null
+    })
+  }
+
+  return players
+}
+
+function movePlayerInState(gameState, playerId, delta) {
+  if (!delta || !Number.isFinite(delta.dx) || !Number.isFinite(delta.dy)) {
+    throw new TypeError('delta.dx and delta.dy must be finite numbers')
+  }
+
+  const nextState = clone(gameState)
+  const player = nextState.players.find((item) => item.id === playerId)
+  if (!player) throw new RangeError(`Unknown player: ${playerId}`)
+  if (nextState.phase === 'ended') return nextState
+  if (nextState.phase === 'hiding' && player.role === 'cat') return nextState
+
+  const nextPosition = {
+    x: clamp(
+      player.position.x + delta.dx,
+      0,
+      nextState.config.mapWidth
+    ),
+    y: clamp(
+      player.position.y + delta.dy,
+      0,
+      nextState.config.mapHeight
+    )
+  }
+  if (isWalkablePosition(nextPosition, nextState.config)) {
+    player.position = nextPosition
+  }
+  addLegacyFields(nextState)
+  return nextState
+}
+
+function getAiDelta(gameState, player, random) {
+  const step = gameState.config.moveStep
+  if (gameState.phase === 'hiding') {
+    if (player.role !== 'mouse') return null
+    const directions = [
+      { dx: 1, dy: 0 },
+      { dx: 1, dy: 1 },
+      { dx: 0, dy: 1 },
+      { dx: -1, dy: 1 },
+      { dx: -1, dy: 0 },
+      { dx: -1, dy: -1 },
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: -1 }
+    ]
+    const randomValue = clamp(Number(random()) || 0, 0, 0.999999)
+    const direction = directions[Math.floor(randomValue * directions.length)]
+    return normalizeDelta(direction.dx, direction.dy, step)
+  }
+
+  if (gameState.phase !== 'chasing') return null
+  const targetRole = player.role === 'cat' ? 'mouse' : 'cat'
+  const target = findNearestPlayer(gameState, player, targetRole)
+  if (!target) return null
+
+  const towardX = target.position.x - player.position.x
+  const towardY = target.position.y - player.position.y
+  const multiplier = player.role === 'mouse' ? -1 : 1
+  return normalizeDelta(towardX * multiplier, towardY * multiplier, step)
+}
+
+function moveAiPlayer(gameState, player, preferredDelta) {
+  const candidates = [
+    preferredDelta,
+    { dx: preferredDelta.dx, dy: 0 },
+    { dx: 0, dy: preferredDelta.dy },
+    { dx: -preferredDelta.dy, dy: preferredDelta.dx },
+    { dx: preferredDelta.dy, dy: -preferredDelta.dx }
+  ]
+
+  for (const delta of candidates) {
+    if (delta.dx === 0 && delta.dy === 0) continue
+    const position = {
+      x: player.position.x + delta.dx,
+      y: player.position.y + delta.dy
+    }
+    if (isWalkablePosition(position, gameState.config)) {
+      player.position = position
+      return
+    }
+  }
+}
+
+function findNearestPlayer(gameState, source, targetRole) {
+  return gameState.players
+    .filter((player) => player.role === targetRole)
+    .map((player) => ({
+      player,
+      distance: calcDistance(source.position, player.position)
+    }))
+    .sort((left, right) => left.distance - right.distance)[0]?.player ?? null
+}
+
+function normalizeDelta(dx, dy, step) {
+  const distance = Math.hypot(dx, dy)
+  if (distance === 0) return null
+  return {
+    dx: Math.round((dx / distance) * step),
+    dy: Math.round((dy / distance) * step)
+  }
+}
+
+function resolveLegacyPlayerId(who) {
+  if (who === 'cat') return 'cat-1'
+  if (who === 'mouse') {
+    return state.players.find((player) => player.role === 'mouse')?.id
+  }
+  return who
+}
+
+function addLegacyFields(gameState) {
+  const cat = gameState.players.find((player) => player.role === 'cat')
+  const mouse = gameState.players.find((player) => player.role === 'mouse')
+
+  gameState.cat = cat ? { ...cat.position } : { x: 0, y: 0 }
+  gameState.mouse = mouse ? { ...mouse.position } : { ...gameState.cat }
+  gameState.distance = mouse
+    ? calcDistance(gameState.cat, gameState.mouse)
+    : 0
+  gameState.timeLeft = gameState.phase === 'hiding'
+    ? gameState.hidingTimeLeft
+    : gameState.chasingTimeLeft
+  gameState.status = gameState.phase === 'ended'
+    ? (gameState.winner === 'cat' ? 'caught' : 'timeout')
+    : 'running'
+}
+
+function isGameState(value) {
+  return Boolean(value && typeof value === 'object' && Array.isArray(value.players))
+}
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value))
 }
