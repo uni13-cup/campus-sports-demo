@@ -89,6 +89,13 @@ const routes = [
     component: () => import('@/views/features/AIPacerView.vue'),
     meta: { title: 'AI角色智能陪跑' }
   },
+  // —— 真实跑步与防作弊核验（李浩阳负责，本次仅新增这一条） ——
+  {
+    path: '/verify',
+    name: 'verify',
+    component: () => import('@/views/verify/VerifyView.vue'),
+    meta: { title: '真实跑步 · 防作弊核验' }
+  },
   // 404 兜底
   {
     path: '/:pathMatch(.*)*',
