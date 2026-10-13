@@ -43,6 +43,7 @@ export function initGame(opts = {}) {
     config: {
       mapWidth: cfg.mapWidth,
       mapHeight: cfg.mapHeight,
+      boundaryPadding: cfg.boundaryPadding,
       catchThreshold: cfg.catchThreshold,
       moveStep: cfg.moveStep,
       obstacles: cfg.obstacles.map((obstacle) => ({ ...obstacle }))
@@ -144,11 +145,12 @@ export function isWalkablePosition(position, config = GAME_CONFIG) {
   if (!position || !Number.isFinite(position.x) || !Number.isFinite(position.y)) {
     return false
   }
+  const boundaryPadding = config.boundaryPadding ?? 0
   if (
-    position.x < 0 ||
-    position.x > config.mapWidth ||
-    position.y < 0 ||
-    position.y > config.mapHeight
+    position.x < boundaryPadding ||
+    position.x > config.mapWidth - boundaryPadding ||
+    position.y < boundaryPadding ||
+    position.y > config.mapHeight - boundaryPadding
   ) {
     return false
   }
@@ -332,7 +334,6 @@ function createPlayers(cfg) {
       role: 'cat',
       controller: 'human',
       position: { x: catSpawn.x, y: catSpawn.y },
-      spawnLandmark: catSpawn.landmark,
       captures: 0
     }
   ]
@@ -345,7 +346,6 @@ function createPlayers(cfg) {
       role: 'mouse',
       controller: 'ai',
       position: { x: spawn.x, y: spawn.y },
-      spawnLandmark: spawn.landmark,
       capturedAt: null
     })
   }
@@ -367,13 +367,13 @@ function movePlayerInState(gameState, playerId, delta) {
   const nextPosition = {
     x: clamp(
       player.position.x + delta.dx,
-      0,
-      nextState.config.mapWidth
+      nextState.config.boundaryPadding,
+      nextState.config.mapWidth - nextState.config.boundaryPadding
     ),
     y: clamp(
       player.position.y + delta.dy,
-      0,
-      nextState.config.mapHeight
+      nextState.config.boundaryPadding,
+      nextState.config.mapHeight - nextState.config.boundaryPadding
     )
   }
   if (isWalkablePosition(nextPosition, nextState.config)) {

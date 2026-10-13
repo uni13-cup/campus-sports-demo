@@ -18,21 +18,22 @@ function backHome() {
     <button class="back-btn" @click="backHome">← 返回首页</button>
 
     <h1 class="title">🐱 校园猫鼠大作战</h1>
-    <p class="subtitle">模拟位置 · 真实判定</p>
+    <p class="subtitle">校园局部地图 · 虚拟坐标单机演示</p>
 
     <div class="rules-card">
       <h2>游戏规则</h2>
       <ul>
-        <li>猫和鼠在模拟校园地图上移动（非真实 GPS）。</li>
-        <li>猫鼠距离 ≤ {{ GAME_CONFIG.catchThreshold }} 米时判定被抓。</li>
-        <li>倒计时 {{ GAME_CONFIG.duration }} 秒，时间内猫抓到鼠则猫胜。</li>
-        <li>时间用尽鼠未被抓住，则鼠胜。</li>
+        <li>你控制1只猫，追捕{{ GAME_CONFIG.mouseCount }}只电脑鼠。</li>
+        <li>开局先躲藏{{ GAME_CONFIG.hidingDuration }}秒，此时猫不能移动。</li>
+        <li>追捕限时{{ GAME_CONFIG.chasingDuration }}秒，距离 ≤ {{ GAME_CONFIG.catchThreshold }}虚拟米自动抓捕。</li>
+        <li>被抓的鼠会变成电脑猫；全部抓完猫胜，超时鼠胜。</li>
+        <li>灰色障碍区域不可进入，其余区域可以移动。</li>
       </ul>
     </div>
 
     <div class="config-card">
-      <span>地图大小</span>
-      <strong>{{ GAME_CONFIG.mapWidth }} × {{ GAME_CONFIG.mapHeight }} m</strong>
+      <span>地图类型</span>
+      <strong>二维虚拟活动区域</strong>
     </div>
 
     <button class="start-btn" @click="startGame">开始游戏</button>

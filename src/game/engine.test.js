@@ -46,7 +46,7 @@ test('moveCharacter returns a new state and moves the player cat while chasing',
   assert.deepEqual(catAfter.position, { x: 410, y: 345 })
 })
 
-test('moveCharacter keeps a role inside the virtual map', () => {
+test('moveCharacter keeps a role inside the activity boundary', () => {
   const initial = { ...initGame(), phase: 'chasing' }
   const moved = moveCharacter(initial, 'cat-1', {
     dx: GAME_CONFIG.mapWidth * 2,
@@ -55,9 +55,26 @@ test('moveCharacter keeps a role inside the virtual map', () => {
   const cat = moved.players.find((player) => player.id === 'cat-1')
 
   assert.deepEqual(cat.position, {
-    x: GAME_CONFIG.mapWidth,
-    y: 0
+    x: GAME_CONFIG.mapWidth - GAME_CONFIG.boundaryPadding,
+    y: GAME_CONFIG.boundaryPadding
   })
+})
+
+test('positions outside the activity boundary are not walkable', () => {
+  assert.equal(
+    isWalkablePosition(
+      { x: GAME_CONFIG.boundaryPadding, y: GAME_CONFIG.boundaryPadding },
+      GAME_CONFIG
+    ),
+    true
+  )
+  assert.equal(
+    isWalkablePosition(
+      { x: GAME_CONFIG.boundaryPadding - 1, y: GAME_CONFIG.boundaryPadding },
+      GAME_CONFIG
+    ),
+    false
+  )
 })
 
 test('the player cat cannot move during the hiding phase', () => {

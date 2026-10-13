@@ -1,17 +1,26 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getState } from '@/game/engine.js'
 
 const router = useRouter()
 const result = ref(null)
+const remainingMice = computed(() =>
+  result.value?.players?.filter((player) => player.role === 'mouse').length ?? 0
+)
+const catCount = computed(() =>
+  result.value?.players?.filter((player) => player.role === 'cat').length ?? 0
+)
+const playerCaptures = computed(() =>
+  result.value?.players?.find((player) => player.controller === 'human')?.captures ?? 0
+)
 
 onMounted(() => {
   result.value = getState()
 })
 
 function playAgain() {
-  router.push('/game')
+  router.push('/game/play')
 }
 
 function backHome() {
@@ -22,22 +31,30 @@ function backHome() {
 <template>
   <div class="page game-result">
     <div class="result-card" v-if="result">
-      <div class="emoji">{{ result.winner === 'cat' ? '🐱' : '🐭' }}</div>
+      <div class="emoji">{{ result.winner === 'cat' ? '🐱🏆' : '🐭🏆' }}</div>
       <h1 class="title">
         {{ result.winner === 'cat' ? '猫获胜！' : '鼠逃脱成功！' }}
       </h1>
       <p class="reason">
-        {{ result.status === 'caught' ? '猫在限定时间内抓到了鼠' : '时间用尽，鼠成功逃脱' }}
+        {{ result.winner === 'cat' ? '所有老鼠都已加入猫阵营' : `时间用尽，仍有 ${remainingMice} 只老鼠存活` }}
       </p>
 
       <div class="stats">
         <div class="stat-item">
-          <span>最终距离</span>
-          <strong>{{ result.distance }} m</strong>
+          <span>最终猫阵营</span>
+          <strong>{{ catCount }} 只</strong>
         </div>
         <div class="stat-item">
-          <span>剩余时间</span>
-          <strong>{{ result.timeLeft }} s</strong>
+          <span>存活老鼠</span>
+          <strong>{{ remainingMice }} 只</strong>
+        </div>
+        <div class="stat-item">
+          <span>玩家抓捕</span>
+          <strong>{{ playerCaptures }} 只</strong>
+        </div>
+        <div class="stat-item">
+          <span>追捕剩余</span>
+          <strong>{{ result.chasingTimeLeft }} 秒</strong>
         </div>
       </div>
     </div>
@@ -76,8 +93,9 @@ function backHome() {
 }
 .stats {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 32px;
+  gap: 22px 30px;
 }
 .stat-item {
   display: flex;

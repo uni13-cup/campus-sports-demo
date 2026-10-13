@@ -9,7 +9,8 @@
 - 追捕阶段 30 秒，猫鼠距离小于或等于 15 个虚拟米时自动抓捕。
 - 被抓的鼠转为电脑猫，从下一次 AI 更新开始协助追捕。
 - 全部鼠被抓时猫方获胜；追捕倒计时结束仍有鼠存活时鼠方获胜。
-- 建筑物不可进入；西运动场、道路和广场可移动。
+- 灰色障碍区域不可进入；其余区域可移动。
+- 猫和鼠的中心坐标均被限制在虚线活动边界内。
 
 ## 推荐接口
 
@@ -50,7 +51,6 @@ import {
       role: 'cat', // cat | mouse
       controller: 'human', // human | ai
       position: { x: 400, y: 350 },
-      spawnLandmark: '第二食堂南侧圆形广场',
       captures: 0
     }
   ],
@@ -134,7 +134,7 @@ function toPercent(position, config) {
 - `players` 中 `role === 'cat'` 的角色显示为猫。
 - `role === 'mouse'` 的角色显示为鼠。
 - `controller === 'human'` 的猫应有明显玩家标识。
-- `config.obstacles` 可绘制成透明建筑碰撞层，但地标名称继续显示。
+- `config.obstacles` 可绘制成不带地标名称的建筑碰撞层。
 - HUD 建议显示当前阶段、当前阶段剩余时间、存活鼠数量和玩家猫抓捕数。
 
 当前阶段时间：

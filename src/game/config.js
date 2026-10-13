@@ -10,6 +10,9 @@ export const GAME_CONFIG = {
   mapWidth: 500,
   mapHeight: 400,
 
+  // 角色中心与地图边缘的最小距离，对应页面中的虚线活动边界
+  boundaryPadding: 20,
+
   // 阵营规模：1 只玩家猫追捕 5 只电脑鼠
   catCount: 1,
   mouseCount: 5,
@@ -32,13 +35,13 @@ export const GAME_CONFIG = {
 
   // 固定出生点（虚拟坐标，不代表真实 GPS）
   spawnPoints: {
-    cat: { x: 400, y: 350, landmark: '第二食堂南侧圆形广场' },
+    cat: { x: 400, y: 350 },
     mice: [
-      { x: 60, y: 80, landmark: '西运动场西北角跑道' },
-      { x: 60, y: 320, landmark: '西运动场西南角跑道' },
-      { x: 180, y: 80, landmark: '西运动场东北侧道路' },
-      { x: 315, y: 90, landmark: '笃行书院1号楼北侧道路' },
-      { x: 370, y: 175, landmark: '第二食堂北侧偏西道路' }
+      { x: 60, y: 80 },
+      { x: 60, y: 320 },
+      { x: 180, y: 80 },
+      { x: 315, y: 90 },
+      { x: 370, y: 175 }
     ]
   },
 
@@ -50,9 +53,9 @@ export const GAME_CONFIG = {
 
   // 建筑障碍物；矩形内部及边界均不可进入
   obstacles: [
-    { id: 'duxing-3', name: '笃行书院3号楼', x: 220, y: 30, width: 85, height: 55 },
-    { id: 'duxing-2', name: '笃行书院2号楼', x: 220, y: 110, width: 85, height: 55 },
-    { id: 'duxing-1', name: '笃行书院1号楼', x: 220, y: 190, width: 85, height: 55 },
-    { id: 'canteen-2', name: '第二食堂', x: 340, y: 220, width: 120, height: 80 }
+    { id: 'obstacle-1', x: 220, y: 30, width: 85, height: 55 },
+    { id: 'obstacle-2', x: 220, y: 110, width: 85, height: 55 },
+    { id: 'obstacle-3', x: 220, y: 190, width: 85, height: 55 },
+    { id: 'obstacle-4', x: 340, y: 220, width: 120, height: 80 }
   ]
 }
