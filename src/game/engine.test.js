@@ -23,6 +23,8 @@ test('initGame creates one human cat and five AI mice', () => {
   assert.equal(state.chasingTimeLeft, 30)
   assert.equal(cats.length, 1)
   assert.equal(mice.length, 5)
+  assert.equal(state.config.movementPresentation.mode, 'accelerated-demo')
+  assert.equal(state.config.movementPresentation.demoMultiplier, 7)
   assert.equal(cats[0].controller, 'human')
   assert.ok(mice.every((mouse) => mouse.controller === 'ai'))
   assert.ok(

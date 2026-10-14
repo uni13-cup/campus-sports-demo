@@ -21,6 +21,7 @@ const ending = ref(false)
 const touchInput = ref({ x: 0, y: 0 })
 const muted = ref(false)
 const feedback = ref('')
+const hudExpanded = ref(true)
 const pressedKeys = new Set()
 let animationFrameId = null
 let simulationStarted = false
@@ -43,18 +44,37 @@ const timeLeft = computed(() => {
     : state.value.chasingTimeLeft
   return Math.max(0, Math.ceil(remaining))
 })
-const nearestMouseDistance = computed(() => {
-  if (!humanCat.value || mice.value.length === 0) return 0
-  return Math.round(Math.min(
-    ...mice.value.map((mouse) =>
-      calcDistance(humanCat.value.position, mouse.position)
-    )
-  ))
+const nearestMouse = computed(() => {
+  if (!humanCat.value || mice.value.length === 0) return null
+  return mice.value
+    .map((mouse) => ({
+      mouse,
+      distance: calcDistance(humanCat.value.position, mouse.position)
+    }))
+    .sort((left, right) => left.distance - right.distance)[0]
 })
+const nearestMouseDistance = computed(() => Math.round(nearestMouse.value?.distance ?? 0))
+const threatLevel = computed(() => {
+  if (phase.value !== 'chasing' || !nearestMouse.value) return 'standby'
+  if (nearestMouse.value.distance <= state.value.config.catchThreshold * 2) return 'danger'
+  if (nearestMouse.value.distance <= 80) return 'near'
+  return 'tracking'
+})
+const recentEvents = computed(() => (state.value?.events ?? [])
+  .filter((event) => ['capture-candidate', 'capture-confirmed', 'role-converted'].includes(event.type))
+  .slice(-3)
+  .reverse())
 const captureCandidate = computed(() => state.value?.captureCandidate ?? null)
 const candidateMouse = computed(() =>
   players.value.find((player) => player.id === captureCandidate.value?.mouseId)
 )
+
+function eventText(event) {
+  if (event.type === 'capture-candidate') return `${event.mouseId} 进入抓捕范围`
+  if (event.type === 'capture-confirmed') return `${event.mouseId} 已被 ${event.catId} 抓获`
+  if (event.type === 'role-converted') return `${event.playerId} 已加入猫阵营`
+  return '赛事状态更新'
+}
 
 function currentInput() {
   let x = touchInput.value.x
@@ -173,8 +193,9 @@ function playFeedback(type) {
   if (muted.value || !audioContext) return
   const oscillator = audioContext.createOscillator()
   const gain = audioContext.createGain()
-  oscillator.type = 'sine'
-  oscillator.frequency.value = type === 'capture' ? 720 : 420
+  const frequencies = { capture: 760, candidate: 590, chase: 480, danger: 330, end: 420 }
+  oscillator.type = type === 'danger' ? 'triangle' : 'sine'
+  oscillator.frequency.value = frequencies[type] ?? 420
   gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
   gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.02)
   gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22)
@@ -228,6 +249,20 @@ watch(captureCandidate, (candidate, previous) => {
     playFeedback('candidate')
   }
 })
+
+watch(phase, (current, previous) => {
+  if (current === 'chasing' && previous === 'hiding') {
+    showFeedback('追捕开始 · 已锁定最近目标')
+    playFeedback('chase')
+  }
+})
+
+watch(threatLevel, (current, previous) => {
+  if (current === 'danger' && previous !== 'danger') {
+    showFeedback('危险接近 · 准备确认模拟触碰')
+    playFeedback('danger')
+  }
+})
 </script>
 
 <template>
@@ -251,44 +286,45 @@ watch(captureCandidate, (candidate, previous) => {
           :players="players"
           :config="state.config"
           :phase="phase"
+          :capture-candidate="captureCandidate"
           @ready="startSimulation"
         />
-        <div v-if="feedback" class="game-feedback" role="status">{{ feedback }}</div>
-        <div v-if="captureCandidate && phase === 'chasing'" class="capture-prompt">
-          <span>🐭 {{ candidateMouse?.id }} 已进入 {{ Math.round(captureCandidate.distance) }}m 抓捕范围</span>
-          <button @click="confirmCandidate">模拟触碰确认</button>
-        </div>
-        <div v-if="phase === 'ended'" class="end-overlay">
-          <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
-          <span>正在前往结算页</span>
-        </div>
-      </div>
 
-      <aside class="game-sidebar">
-        <section class="status-card status-grid">
-          <div><span>存活鼠</span><strong>{{ mice.length }}</strong></div>
-          <div><span>猫阵营</span><strong>{{ cats.length }}</strong></div>
-          <div><span>最近目标</span><strong>{{ nearestMouseDistance }}<small>m</small></strong></div>
-          <div><span>你的抓捕</span><strong>{{ humanCat?.captures ?? 0 }}</strong></div>
-        </section>
+        <aside class="match-hud" :class="{ collapsed: !hudExpanded }">
+          <button class="hud-toggle" @click="hudExpanded = !hudExpanded">
+            {{ hudExpanded ? '收起战况' : '展开战况' }}
+          </button>
+          <div class="status-grid">
+            <div><span>存活鼠</span><strong>{{ mice.length }}</strong></div>
+            <div><span>猫阵营</span><strong>{{ cats.length }}</strong></div>
+            <div><span>最近目标</span><strong>{{ nearestMouseDistance }}<small>m</small></strong></div>
+            <div><span>你的抓捕</span><strong>{{ humanCat?.captures ?? 0 }}</strong></div>
+          </div>
 
-        <section class="status-card mission-card">
-          <span class="card-kicker">当前任务</span>
-          <strong v-if="phase === 'hiding'">等待老鼠完成躲藏</strong>
-          <strong v-else-if="phase === 'chasing'">在时间结束前抓住全部电脑鼠</strong>
-          <strong v-else>本局已经结束</strong>
-          <p>绿色虚线为活动边界；建筑和水域不可进入。当前位置均为二维模拟数据，不是真实 GPS。</p>
-        </section>
+          <div v-if="hudExpanded" class="hud-details">
+            <div class="target-card" :class="threatLevel">
+              <span class="card-kicker">追踪态势</span>
+              <strong v-if="phase === 'hiding'">等待追捕开始</strong>
+              <strong v-else-if="nearestMouse">
+                {{ threatLevel === 'danger' ? '即将进入抓捕距离' : threatLevel === 'near' ? '目标正在接近' : '锁定最近电脑鼠' }}
+              </strong>
+              <strong v-else>全部目标已清除</strong>
+              <p>红色虚线连接当前最近目标，短尾迹仅保留约 4 秒。</p>
+            </div>
 
-        <section class="status-card legend-card">
-          <span><i class="legend-dot player-cat"></i>玩家猫</span>
-          <span><i class="legend-dot computer-cat"></i>转化后的电脑猫</span>
-          <span><i class="legend-dot computer-mouse"></i>电脑鼠</span>
-          <span><i class="legend-block"></i>不可进入建筑</span>
-        </section>
+            <div v-if="recentEvents.length" class="event-feed" aria-label="赛事事件">
+              <span class="card-kicker">赛事播报</span>
+              <p v-for="event in recentEvents" :key="event.id">{{ eventText(event) }}</p>
+            </div>
 
-        <section class="status-card control-card">
-          <p>{{ phase === 'hiding' ? '躲藏阶段不可移动' : '按住方向键 / WASD / 触屏方向持续移动' }}</p>
+            <p class="simulation-note">
+              模拟定位 · 约 {{ state.config.movementPresentation?.demoMultiplier ?? 7 }}× 加速演示。建筑碰撞仍为 OSM 外包矩形近似。
+            </p>
+          </div>
+        </aside>
+
+        <section class="movement-deck" aria-label="持续移动控制">
+          <span>{{ phase === 'hiding' ? '等待躲藏结束' : '按住移动' }}</span>
           <div class="dpad" :class="{ disabled: phase !== 'chasing' }">
             <button @pointerdown="holdDirection(0, -1, $event)" aria-label="向上">↑</button>
             <div>
@@ -297,13 +333,21 @@ watch(captureCandidate, (candidate, previous) => {
               <button @pointerdown="holdDirection(1, 0, $event)" aria-label="向右">→</button>
             </div>
           </div>
-          <button class="sound-toggle" @click="toggleMute">
-            {{ muted ? '🔇 声音已关闭' : '🔊 事件提示音' }}
+          <button class="sound-toggle" @click="toggleMute" :aria-label="muted ? '打开事件提示音' : '关闭事件提示音'">
+            {{ muted ? '🔇' : '🔊' }}
           </button>
         </section>
 
-        <p class="collision-note">建筑碰撞目前采用 OSM 建筑外包矩形近似，可在地图内开启“碰撞范围”核对。</p>
-      </aside>
+        <div v-if="feedback" class="game-feedback" role="status">{{ feedback }}</div>
+        <div v-if="captureCandidate && phase === 'chasing'" class="capture-prompt">
+          <span>🐭 {{ candidateMouse?.id }} · {{ Math.round(captureCandidate.distance) }}m</span>
+          <button @click="confirmCandidate">确认模拟触碰</button>
+        </div>
+        <div v-if="phase === 'ended'" class="end-overlay">
+          <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
+          <span>正在生成赛事结算</span>
+        </div>
+      </div>
     </section>
   </main>
 </template>
@@ -505,5 +549,167 @@ watch(captureCandidate, (candidate, previous) => {
   .game-sidebar { grid-template-columns: 1fr; }
   .control-card { order: -1; }
   .legend-card { grid-template-columns: 1fr 1fr; }
+}
+
+/* 2.1 沉浸式赛事布局：地图是主舞台，战况与控制均为可收起浮层。 */
+.game-map-page {
+  height: 100dvh;
+  min-height: 680px;
+  padding: 12px clamp(12px, 1.6vw, 24px) 16px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(61, 192, 131, 0.2), transparent 30%),
+    linear-gradient(160deg, #eaf2ed, #dce8e0);
+}
+.game-topbar { width: 100%; margin-bottom: 10px; }
+.game-stage {
+  display: block;
+  width: 100%;
+  height: calc(100dvh - 82px);
+  margin: 0;
+}
+.map-panel {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border-color: rgba(18, 63, 46, 0.18);
+  border-radius: 22px;
+  box-shadow: 0 24px 70px rgba(17, 57, 42, 0.2);
+}
+.match-hud {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  right: 66px;
+  width: min(250px, calc(100% - 150px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.52);
+  border-radius: 17px;
+  background: rgba(11, 37, 28, 0.84);
+  color: #fff;
+  box-shadow: 0 16px 38px rgba(7, 29, 21, 0.24);
+  backdrop-filter: blur(14px);
+  transition: width 0.2s ease;
+}
+.match-hud.collapsed { width: 214px; }
+.hud-toggle {
+  width: 100%;
+  padding: 7px 11px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 750;
+  text-align: right;
+  cursor: pointer;
+}
+.match-hud .status-grid { grid-template-columns: repeat(4, 1fr); }
+.match-hud .status-grid div { gap: 2px; padding: 10px 6px; text-align: center; }
+.match-hud .status-grid div:nth-child(n) { border: 0; }
+.match-hud .status-grid span { color: rgba(255, 255, 255, 0.58); font-size: 8px; }
+.match-hud .status-grid strong { color: #fff; font-size: 17px; }
+.match-hud .status-grid small { color: rgba(255, 255, 255, 0.65); }
+.hud-details { padding: 0 11px 11px; }
+.target-card {
+  padding: 10px;
+  border: 1px solid rgba(77, 229, 158, 0.18);
+  border-radius: 12px;
+  background: rgba(54, 163, 112, 0.12);
+}
+.target-card.near { border-color: rgba(255, 205, 82, 0.4); background: rgba(255, 191, 53, 0.12); }
+.target-card.danger { border-color: rgba(255, 103, 79, 0.55); background: rgba(255, 77, 56, 0.16); animation: danger-glow 0.8s ease-in-out infinite alternate; }
+.card-kicker { margin-bottom: 4px; color: #62e2a9; font-size: 8px; }
+.target-card strong { display: block; font-size: 12px; }
+.target-card p, .simulation-note {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 8px;
+  line-height: 1.55;
+}
+.event-feed { margin-top: 8px; padding: 8px 10px; border-radius: 11px; background: rgba(255, 255, 255, 0.06); }
+.event-feed p { margin: 4px 0 0; color: rgba(255, 255, 255, 0.82); font-size: 9px; }
+.simulation-note { margin: 8px 2px 0; }
+
+.movement-deck {
+  position: absolute;
+  z-index: 4;
+  left: 16px;
+  bottom: 18px;
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: end;
+  gap: 5px 8px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 16px;
+  background: rgba(11, 37, 28, 0.8);
+  color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 14px 32px rgba(8, 31, 22, 0.23);
+  backdrop-filter: blur(12px);
+}
+.movement-deck > span { grid-column: 1 / -1; font-size: 8px; font-weight: 800; text-align: center; }
+.movement-deck .dpad { gap: 3px; }
+.movement-deck .dpad div { gap: 3px; }
+.movement-deck .dpad button {
+  width: 37px;
+  height: 32px;
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 15px;
+}
+.movement-deck .sound-toggle {
+  width: 31px;
+  height: 31px;
+  margin: 0 0 1px;
+  padding: 0;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 13px;
+}
+.game-feedback { top: 18px; z-index: 6; background: rgba(13, 51, 38, 0.94); }
+.capture-prompt {
+  z-index: 6;
+  bottom: 22px;
+  padding: 9px 10px;
+  border-radius: 14px;
+  background: rgba(255, 244, 213, 0.96);
+}
+.end-overlay { z-index: 7; }
+
+@keyframes danger-glow {
+  to { box-shadow: 0 0 0 3px rgba(255, 89, 65, 0.13), inset 0 0 20px rgba(255, 89, 65, 0.09); }
+}
+
+@media (max-width: 700px) {
+  .game-map-page { min-height: 0; padding: 8px 7px 9px; }
+  .game-topbar { margin-bottom: 7px; }
+  .game-stage { height: calc(100dvh - 62px); }
+  .map-panel { min-height: 0; border-radius: 17px; }
+  .match-hud {
+    top: 54px;
+    right: 7px;
+    width: calc(100% - 14px);
+    max-width: 292px;
+    border-radius: 14px;
+  }
+  .match-hud .hud-toggle, .match-hud .hud-details { display: none; }
+  .match-hud.collapsed { width: 204px; }
+  .hud-toggle { padding: 5px 9px; }
+  .match-hud .status-grid div { padding: 7px 4px; }
+  .match-hud .status-grid strong { font-size: 15px; }
+  .hud-details { padding: 0 8px 8px; }
+  .event-feed, .simulation-note { display: none; }
+  .movement-deck { left: 9px; bottom: 28px; padding: 7px; }
+  .movement-deck .dpad button { width: 36px; height: 31px; }
+  .capture-prompt { bottom: 32px; width: calc(100% - 160px); justify-content: space-between; }
+  .capture-prompt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .capture-prompt button { flex: none; }
+  .game-feedback { top: 46px; max-width: 75%; text-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .match-hud, .target-card, .phase-timer { transition: none; animation: none; }
 }
 </style>

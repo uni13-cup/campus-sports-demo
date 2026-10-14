@@ -103,6 +103,15 @@ export const GAME_CONFIG = {
   mouseSpeed: 28,
   aiCatSpeed: 34,
 
+  // 2.1 展示参数：当前速度服务于 30 秒演示局，不代表现实跑步速度。
+  // 现实参考值只用于界面说明，绝不参与移动与抓捕计算。
+  movementPresentation: {
+    mode: 'accelerated-demo',
+    demoMultiplier: 7,
+    referenceRunSpeed: 6,
+    unit: 'simulated-meters-per-second'
+  },
+
   // 刷新间隔（毫秒）
   tickInterval: 1000,
 
