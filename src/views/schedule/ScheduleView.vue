@@ -1,105 +1,118 @@
 <script setup>
 import { computed, ref } from 'vue'
 
-// 日程页：校园跑达标规划 + 课表 + AI 推荐运动时段（对应参考视频日程页）
-const goal = { total: 30, done: 11, km: 22.5, deadline: '12/31', leftDays: 79 }
-const progress = computed(() => Math.round((goal.done / goal.total) * 100))
-// SVG 圆环参数
-const R = 30
-const C = 2 * Math.PI * R
-const dashOffset = computed(() => C * (1 - progress.value / 100))
+// 计划页：达标进度 → 今日任务 → 本周跑步计划 → 可跑时段 → 约跑
+// 负责人：李浩阳（原页面由李金燚创建，本次重排模块并补充约跑）
 
+const goal = { total: 30, done: 11, km: 22.5, leftDays: 79 }
+const left = computed(() => goal.total - goal.done)
+const progress = computed(() => Math.round((goal.done / goal.total) * 100))
+const avgKm = computed(() => (goal.km / goal.done).toFixed(1))
+
+// 今天的建议量
+const todayTask = { km: '3.5', min: 26, pace: `7'20"` }
+
+// 本周计划：plan 计划公里，done 已完成公里，rest 休息日
 const week = [
-  { day: '一', n: 4 }, { day: '二', n: 2 }, { day: '三', n: 3 },
-  { day: '四', n: 2 }, { day: '五', n: 2 }, { day: '六', n: 0 }, { day: '日', n: 0 }
+  { day: '一', plan: 3, done: 3 },
+  { day: '二', plan: 3, done: 0, today: true },
+  { day: '三', plan: 3, done: 0 },
+  { day: '四', plan: 0, done: 0, rest: true },
+  { day: '五', plan: 3, done: 0 },
+  { day: '六', plan: 5, done: 0 },
+  { day: '日', plan: 5, done: 0 }
 ]
 const selectedDay = ref('二')
-
-const dates = [
-  { day: '一', d: 12 }, { day: '二', d: 13, today: true }, { day: '三', d: 14 },
-  { day: '四', d: 15 }, { day: '五', d: 16 }, { day: '六', d: 17 }, { day: '日', d: 18 }
-]
+const currentWeek = computed(
+  () => week.find((w) => w.day === selectedDay.value) || week[1]
+)
+const weekTotal = computed(() => week.reduce((s, w) => s + w.plan, 0))
+const weekDone = computed(() => week.reduce((s, w) => s + w.done, 0))
 
 const slots = [
-  { t: '06-08', tag: '★黄金', hot: true }, { t: '08-10' }, { t: '10-12' },
-  { t: '12-14', tag: '午休' }, { t: '14-16' }, { t: '16-18' },
-  { t: '18-20', tag: 'AI推荐', hot: true }, { t: '20-22' }
+  { t: '06-08', tag: '★黄金', hot: true },
+  { t: '08-10' },
+  { t: '10-12' },
+  { t: '12-14', tag: '午休' },
+  { t: '14-16' },
+  { t: '16-18' },
+  { t: '18-20', tag: '推荐', hot: true },
+  { t: '20-22' }
 ]
 const selectedSlot = ref('18-20')
+
+const mateRuns = ref([
+  { icon: '🌙', name: '夜跑 5 公里', when: '今晚 19:00 · 东操场', joined: false },
+  { icon: '⏱️', name: '体测冲刺陪练', when: '周三 18:30 · 田径场', joined: false }
+])
+
+function joinMate(m) {
+  m.joined = true
+}
 </script>
 
 <template>
   <div class="page">
     <!-- 头部 -->
     <header class="page-head">
-      <h2>🎓 校园跑规划</h2>
-      <span class="ai-badge">⚡ AI 已学习你的课表</span>
+      <div>
+        <h2>校园跑计划</h2>
+        <p class="sub">本学期 {{ goal.total }} 次 · 还剩 {{ goal.leftDays }} 天</p>
+      </div>
+      <span class="pct">{{ progress }}%</span>
     </header>
 
-    <!-- 达标进度卡 -->
-    <section class="goal-card">
-      <p class="goal-tag">本学期校园跑</p>
-      <div class="goal-main">
-        <div class="goal-text">
-          <h3>还差 <em>{{ goal.total - goal.done }}</em> 次就达标</h3>
-          <p class="deadline">截止 {{ goal.deadline }} · 还剩 {{ goal.leftDays }} 天</p>
-          <div class="bar"><div class="bar-fill" :style="{ width: progress + '%' }"></div></div>
-          <p class="goal-foot">
-            <span>已跑 {{ goal.done }} 次 · {{ goal.km }}km</span>
-            <span>目标 {{ goal.total }} 次</span>
-          </p>
-        </div>
-        <svg class="ring" viewBox="0 0 72 72">
-          <circle cx="36" cy="36" :r="R" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="6" />
-          <circle
-            cx="36" cy="36" :r="R" fill="none" stroke="#a3e635" stroke-width="6"
-            stroke-linecap="round" :stroke-dasharray="C" :stroke-dashoffset="dashOffset"
-            transform="rotate(-90 36 36)"
-          />
-          <text x="36" y="41" text-anchor="middle" class="ring-text">{{ progress }}%</text>
-        </svg>
+    <!-- 达标进度 -->
+    <section class="card goal-card">
+      <div class="goal-top">
+        <strong>{{ goal.done }}<em>/{{ goal.total }}</em></strong>
+        <span>还差 <b>{{ left }}</b> 次达标</span>
       </div>
+      <div class="bar"><div class="bar-fill" :style="{ width: progress + '%' }"></div></div>
+      <p class="goal-foot">已跑 {{ goal.km }} km · 平均每次 {{ avgKm }} km</p>
     </section>
 
-    <!-- 我的课表 -->
+    <!-- 今日任务 -->
+    <section class="today">
+      <div class="today-info">
+        <span class="today-tag">今天</span>
+        <strong>{{ todayTask.km }} 公里</strong>
+        <p>约 {{ todayTask.min }} 分钟 · 目标配速 {{ todayTask.pace }}</p>
+      </div>
+      <router-link to="/exercise" class="today-btn">去开跑</router-link>
+    </section>
+
+    <!-- 本周跑步计划 -->
     <div class="section-head">
-      <h3>我的课表</h3>
-      <span class="more">全部 ></span>
+      <h3>本周跑步计划</h3>
+      <span class="more">{{ weekDone }} / {{ weekTotal }} km</span>
     </div>
     <section class="card week-card">
       <button
         v-for="w in week"
         :key="w.day"
         class="day-cell"
-        :class="{ active: selectedDay === w.day }"
+        :class="{ active: selectedDay === w.day, isRest: w.rest }"
         @click="selectedDay = w.day"
       >
         <span class="d">{{ w.day }}</span>
-        <span class="n" :class="{ free: w.n === 0 }">{{ w.n === 0 ? '休息' : w.n + ' 节' }}</span>
+        <span class="v">{{ w.rest ? '休' : w.plan }}</span>
+        <span class="flag" :class="{ ok: w.plan > 0 && w.done >= w.plan }"></span>
       </button>
     </section>
+    <p class="week-tip">
+      周{{ currentWeek.day }}：
+      <template v-if="currentWeek.rest">安排休息，做点拉伸放松</template>
+      <template v-else-if="currentWeek.done >= currentWeek.plan">已完成 {{ currentWeek.done }} km，干得不错</template>
+      <template v-else>计划 {{ currentWeek.plan }} km，已完成 {{ currentWeek.done }} km</template>
+    </p>
 
-    <!-- AI 推算 -->
-    <section class="ai-banner card">
-      <span class="ai-icon">🪄</span>
-      <p><strong>AI 推算：</strong>本周有 7 天晚间 18:00-20:00 空闲，最适合校园跑，已为你高亮预留。</p>
-    </section>
-
-    <!-- 本周日期 -->
-    <section class="card date-row">
-      <div v-for="x in dates" :key="x.d" class="date-cell" :class="{ today: x.today }">
-        <span class="d">{{ x.day }}</span>
-        <span class="num">{{ x.d }}</span>
-        <span v-if="x.today" class="dot"></span>
-      </div>
-    </section>
-
-    <!-- 运动时段 -->
+    <!-- 可跑时段 -->
     <div class="section-head">
-      <h3>周{{ selectedDay }}运动安排</h3>
-      <span class="more">5 个空闲时段</span>
+      <h3>周{{ selectedDay }}可跑时段</h3>
+      <span class="more">按课表空隙推算</span>
     </div>
-    <p class="slots-tip">根据课表自动推算你的可运动时间</p>
+    <p class="slots-tip">⚡ 18:00-20:00 晚间空闲最多，最适合校园跑</p>
     <section class="slots">
       <button
         v-for="s in slots"
@@ -111,92 +124,140 @@ const selectedSlot = ref('18-20')
         {{ s.t }} <em v-if="s.tag">{{ s.tag }}</em>
       </button>
     </section>
+
+    <!-- 约跑 -->
+    <div class="section-head">
+      <h3>约跑计划</h3>
+      <router-link to="/discover" class="more">去操场 ›</router-link>
+    </div>
+    <section class="mate-list">
+      <div v-for="m in mateRuns" :key="m.name" class="mate-card card">
+        <span class="m-icon">{{ m.icon }}</span>
+        <div class="m-info">
+          <strong>{{ m.name }}</strong>
+          <p>{{ m.when }}</p>
+        </div>
+        <button class="m-btn" :class="{ joined: m.joined }" @click="joinMate(m)">
+          {{ m.joined ? '已约' : '一起' }}
+        </button>
+      </div>
+    </section>
+
+    <!-- 课表摘要 -->
+    <section class="card brief">
+      <span class="b-icon">📅</span>
+      <p>本周 15 节课，其中 3 个晚上空闲 · <span>课表已和学习日程同步</span></p>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .page-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
 }
 .page-head h2 {
   font-size: 20px;
 }
-.ai-badge {
+.sub {
   font-size: 12px;
-  color: var(--color-primary);
-  background: var(--color-primary-light);
-  padding: 4px 10px;
-  border-radius: 999px;
+  color: var(--color-text-light);
+  margin-top: 4px;
 }
+.pct {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ===== 达标进度 ===== */
 .goal-card {
   margin-top: 14px;
-  border-radius: var(--radius);
-  padding: 18px 16px;
-  background: linear-gradient(135deg, #3b82f6, var(--color-primary-dark));
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(46, 107, 255, 0.3);
 }
-.goal-tag {
-  font-size: 12px;
-  opacity: 0.85;
-  background: rgba(255, 255, 255, 0.18);
-  display: inline-block;
-  padding: 3px 10px;
-  border-radius: 999px;
-}
-.goal-main {
+.goal-top {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
-  margin-top: 10px;
-  gap: 12px;
 }
-.goal-text h3 {
-  font-size: 19px;
-  font-weight: 700;
+.goal-top strong {
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
 }
-.goal-text em {
+.goal-top strong em {
   font-style: normal;
-  font-size: 26px;
-  color: #a3e635;
-  padding: 0 2px;
+  font-size: 15px;
+  color: var(--color-text-light);
+  font-weight: 600;
 }
-.deadline {
+.goal-top span {
   font-size: 12px;
-  opacity: 0.85;
-  margin: 4px 0 10px;
+  color: var(--color-text-light);
+}
+.goal-top b {
+  color: var(--color-primary);
+  font-size: 15px;
 }
 .bar {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.25);
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-primary-light);
   overflow: hidden;
+  margin: 12px 0 8px;
 }
 .bar-fill {
   height: 100%;
-  border-radius: 3px;
-  background: #a3e635;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #17c9ae, var(--color-primary-dark));
 }
 .goal-foot {
-  display: flex;
-  justify-content: space-between;
   font-size: 12px;
-  margin-top: 8px;
-  opacity: 0.9;
-  min-width: 200px;
+  color: var(--color-text-light);
 }
-.ring {
-  width: 84px;
-  height: 84px;
+
+/* ===== 今日任务 ===== */
+.today {
+  margin-top: 12px;
+  border-radius: var(--radius);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: linear-gradient(135deg, #12b3a0, var(--color-primary-dark));
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(7, 120, 109, 0.26);
+}
+.today-tag {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 9px;
+  border-radius: 999px;
+}
+.today-info strong {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  margin: 6px 0 2px;
+}
+.today-info p {
+  font-size: 12px;
+  opacity: 0.85;
+}
+.today-btn {
   flex-shrink: 0;
-}
-.ring-text {
-  fill: #fff;
-  font-size: 15px;
+  background: #fff;
+  color: var(--color-primary-dark);
+  font-size: 13px;
   font-weight: 700;
+  padding: 9px 18px;
+  border-radius: 999px;
 }
+
+/* ===== 本周计划 ===== */
 .week-card {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -207,84 +268,57 @@ const selectedSlot = ref('18-20')
   border: none;
   background: none;
   border-radius: 12px;
-  padding: 8px 2px;
+  padding: 9px 2px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 .day-cell .d {
   font-size: 12px;
   color: var(--color-text-light);
 }
-.day-cell .n {
-  font-size: 12px;
-  font-weight: 600;
+.day-cell .v {
+  font-size: 13px;
+  font-weight: 700;
 }
-.day-cell .n.free {
-  color: var(--color-accent);
+.day-cell .flag {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--color-border);
+}
+.day-cell .flag.ok {
+  background: var(--color-success);
+}
+.day-cell.isRest .v {
+  color: var(--color-text-light);
+  font-weight: 500;
 }
 .day-cell.active {
   background: var(--color-primary);
 }
 .day-cell.active .d,
-.day-cell.active .n {
+.day-cell.active .v {
   color: #fff;
 }
-.ai-banner {
-  margin-top: 12px;
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  background: var(--color-primary-light);
-  box-shadow: none;
-  font-size: 13px;
-  line-height: 1.6;
+.day-cell.active .flag {
+  background: rgba(255, 255, 255, 0.6);
 }
-.ai-icon {
-  font-size: 16px;
-}
-.date-row {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  padding: 12px 8px;
-}
-.date-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  position: relative;
-}
-.date-cell .d {
-  font-size: 11px;
-  color: var(--color-text-light);
-}
-.date-cell .num {
-  font-size: 15px;
-  font-weight: 600;
-}
-.date-cell.today .num {
-  width: 30px;
-  height: 30px;
-  border-radius: 10px;
-  background: var(--color-primary);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.date-cell .dot {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--color-primary);
-}
-.slots-tip {
+.week-tip {
   font-size: 12px;
   color: var(--color-text-light);
-  margin: -6px 2px 10px;
+  margin: 10px 2px 0;
+}
+
+/* ===== 可跑时段 ===== */
+.slots-tip {
+  font-size: 12px;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
 }
 .slots {
   display: grid;
@@ -292,13 +326,12 @@ const selectedSlot = ref('18-20')
   gap: 8px;
 }
 .slot {
-  border: none;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
   padding: 10px 2px;
   font-size: 12px;
   background: var(--color-white);
   color: var(--color-text);
-  box-shadow: var(--shadow);
 }
 .slot em {
   font-style: normal;
@@ -307,17 +340,87 @@ const selectedSlot = ref('18-20')
   display: block;
 }
 .slot.hot {
-  color: #65a30d;
-  background: #f7fee7;
+  color: #b45309;
+  background: #fff7ed;
+  border-color: #fed7aa;
 }
 .slot.hot em {
-  color: #84cc16;
+  color: #f59e0b;
 }
 .slot.active {
   background: var(--color-primary);
+  border-color: var(--color-primary);
   color: #fff;
 }
 .slot.active em {
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* ===== 约跑 ===== */
+.mate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mate-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+}
+.m-icon {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: var(--color-primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+}
+.m-info {
+  flex: 1;
+  min-width: 0;
+}
+.m-info strong {
+  font-size: 14px;
+}
+.m-info p {
+  font-size: 12px;
+  color: var(--color-text-light);
+  margin-top: 2px;
+}
+.m-btn {
+  flex-shrink: 0;
+  border: none;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+}
+.m-btn.joined {
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+}
+
+/* ===== 课表摘要 ===== */
+.brief {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.b-icon {
+  font-size: 17px;
+}
+.brief p {
+  font-size: 13px;
+}
+.brief p span {
+  color: var(--color-text-light);
+  font-size: 12px;
 }
 </style>

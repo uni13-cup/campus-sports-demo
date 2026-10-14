@@ -1,106 +1,157 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
-// 发现页：校区横幅 + 运动社群 + 热门跑团组队（对应参考视频发现/社区页）
-const tabs = ['关注', '社区', '兴趣活动']
-const activeTab = ref('社区')
+// 操场页：东校区约跑 → 跑团榜（团队排名）→ 个人榜
+// 负责人：李浩阳（原页面由李金燚创建，本次换掉社群九宫格与跑团列表的呈现方式）
 
-const groups = [
-  { icon: '⚽', name: '足球', online: 23 },
-  { icon: '🏸', name: '羽毛球', online: 18 },
-  { icon: '🏀', name: '篮球', online: 31 },
-  { icon: '🏃', name: '长跑', online: 45 },
-  { icon: '🚴', name: '骑行', online: 12 },
-  { icon: '🧘', name: '瑜伽', online: 9 },
-  { icon: '🥏', name: '飞盘', online: 15 },
-  { icon: '🏊', name: '游泳', online: 7 }
-]
+const campus = '东校区'
+const onlineCount = 86
 
-const teams = ref([
-  { icon: '🌙', bg: '#e3edff', name: '晨光夜跑团', desc: '128 人 · 本周已跑 340 km · 江东校区', joined: true },
-  { icon: '🏸', bg: '#e0f7e3', name: '羽你同行', desc: '64 人 · 每周三晚七操场集合', joined: false },
-  { icon: '🏆', bg: '#ffe8d9', name: '马拉松特训营', desc: '96 人 · 备战校马 · 教练带队', joined: false }
+// 今日约跑：可以点"加入"的活动卡片
+const meetups = ref([
+  {
+    icon: '🏸', sport: '羽毛球', title: '体育馆双打',
+    when: '今晚 19:30', place: '东体育馆 2 号场', joined: 3, cap: 4, mine: false
+  },
+  {
+    icon: '🏃', sport: '夜跑', title: '操场环线 5 公里',
+    when: '今晚 20:30', place: '东操场南门', joined: 7, cap: 10, mine: false
+  },
+  {
+    icon: '⚽', sport: '足球', title: '八人制友谊赛',
+    when: '周三 16:00', place: '西区足球场', joined: 14, cap: 16, mine: false
+  },
+  {
+    icon: '🥏', sport: '飞盘', title: '草坪飞盘局',
+    when: '周四 17:00', place: '中心草坪', joined: 5, cap: 12, mine: false
+  }
 ])
+
+// 跑团榜：团队排名
+const teams = ref([
+  { rank: 1, name: '追风跑团', km: 412, members: 36, joined: false },
+  { rank: 2, name: '夜航跑团', km: 340, members: 28, joined: true },
+  { rank: 3, name: '体测冲锋队', km: 286, members: 22, joined: false },
+  { rank: 4, name: '羽林小分队', km: 233, members: 19, joined: false }
+])
+const teamMax = computed(() => Math.max(...teams.value.map((t) => t.km)))
+
+// 个人榜：轻量 Top3 + 我的名次
+const soloTop = [
+  { rank: 1, name: '王同学', km: 42.6, avatar: '🦊' },
+  { rank: 2, name: '李同学', km: 38.2, avatar: '🐼' },
+  { rank: 3, name: '张同学', km: 35.7, avatar: '🐨' }
+]
+const podium = [soloTop[1], soloTop[0], soloTop[2]]
+const me = { rank: 7, km: 22.5 }
 
 const toast = ref('')
 let toastTimer = null
-function join(t) {
-  if (t.joined) return
-  t.joined = true
-  toast.value = '组队成功，已通知对方'
+function flash(text) {
+  toast.value = text
   clearTimeout(toastTimer)
   toastTimer = setTimeout(() => (toast.value = ''), 2000)
+}
+function joinMeet(m) {
+  if (m.mine) return
+  m.mine = true
+  m.joined += 1
+  flash(`已加入「${m.title}」，已通知发起人`)
+}
+function joinTeam(t) {
+  if (t.joined) return
+  t.joined = true
+  flash(`已加入跑团「${t.name}」`)
 }
 </script>
 
 <template>
   <div class="page">
-    <!-- 搜索 + 标签页 -->
-    <div class="search-bar card">
-      <span>🔍</span>
-      <span class="ph">搜索同学 / 跑团 / 活动</span>
-    </div>
-    <div class="tabs page-tabs">
-      <button
-        v-for="t in tabs"
-        :key="t"
-        class="tab-item"
-        :class="{ active: activeTab === t }"
-        @click="activeTab = t"
-      >{{ t }}</button>
-    </div>
-
-    <!-- 校区横幅 -->
-    <section class="campus-banner">
+    <!-- 校区信息条 -->
+    <section class="campus-bar card">
       <span class="pin">📍</span>
       <div class="campus-info">
-        <strong>本校区 · 江东校区</strong>
-        <p>2 公里内 86 位同学正在运动</p>
+        <strong>{{ campus }}</strong>
+        <p>2 公里内 <b>{{ onlineCount }}</b> 位同学正在运动</p>
       </div>
       <button class="switch-btn">切换</button>
     </section>
 
-    <!-- 运动社群 -->
+    <!-- 今日约跑 -->
     <div class="section-head">
-      <h3>运动社群</h3>
-      <span class="more">全部 ›</span>
+      <h3>今天的约跑</h3>
+      <span class="more">左右滑动 ›</span>
     </div>
-    <section class="card group-grid">
-      <div v-for="g in groups" :key="g.name" class="group">
-        <span class="g-icon">{{ g.icon }}</span>
-        <span class="g-name">{{ g.name }}</span>
-        <span class="g-online">{{ g.online }} 在线</span>
-      </div>
-    </section>
-
-    <!-- 热门跑团 -->
-    <div class="section-head">
-      <h3>热门跑团</h3>
-      <router-link to="/features/sports-wall" class="more">搭子墙 ›</router-link>
-    </div>
-    <section class="team-list">
-      <div v-for="t in teams" :key="t.name" class="team-card card">
-        <span class="t-icon" :style="{ background: t.bg }">{{ t.icon }}</span>
-        <div class="t-info">
-          <strong>{{ t.name }}</strong>
-          <p>{{ t.desc }}</p>
+    <div class="meet-scroll">
+      <article
+        v-for="m in meetups"
+        :key="m.title"
+        class="meet-card"
+        :class="{ mine: m.mine }"
+      >
+        <div class="meet-head">
+          <span class="meet-icon">{{ m.icon }}</span>
+          <span class="meet-sport">{{ m.sport }}</span>
         </div>
-        <button class="join-btn" :class="{ joined: t.joined }" @click="join(t)">
-          {{ t.joined ? '已加入' : '组队' }}
+        <strong class="meet-title">{{ m.title }}</strong>
+        <p class="meet-when">{{ m.when }}</p>
+        <p class="meet-place">📍 {{ m.place }}</p>
+        <div class="meet-foot">
+          <span class="meet-count">{{ m.joined }}/{{ m.cap }} 人</span>
+          <button class="meet-btn" :class="{ joined: m.mine }" @click="joinMeet(m)">
+            {{ m.mine ? '已加入' : '加入' }}
+          </button>
+        </div>
+      </article>
+    </div>
+
+    <!-- 跑团榜 -->
+    <div class="section-head">
+      <h3>跑团榜 · 本周</h3>
+      <span class="more">团队总里程</span>
+    </div>
+    <section class="card team-board">
+      <div
+        v-for="t in teams"
+        :key="t.name"
+        class="team-row"
+        :class="{ mine: t.joined }"
+      >
+        <span class="rank" :class="'r' + t.rank">{{ t.rank }}</span>
+        <div class="t-info">
+          <strong>{{ t.name }}<em v-if="t.joined">我的</em></strong>
+          <div class="t-bar">
+            <div class="t-fill" :style="{ width: (t.km / teamMax) * 100 + '%' }"></div>
+          </div>
+          <p>{{ t.members }} 人 · 本周 {{ t.km }} km</p>
+        </div>
+        <button class="t-btn" :class="{ joined: t.joined }" @click="joinTeam(t)">
+          {{ t.joined ? '已加入' : '加入' }}
         </button>
       </div>
     </section>
 
-    <!-- 附近的人 -->
-    <section class="nearby card">
-      <div class="avatars">
-        <span v-for="e in ['🦊', '🐼', '🐨', '🦁']" :key="e">{{ e }}</span>
+    <!-- 个人榜 -->
+    <div class="section-head">
+      <h3>个人榜 · 本周</h3>
+      <span class="more">我第 {{ me.rank }} 名</span>
+    </div>
+    <section class="card solo-board">
+      <div class="podium">
+        <div v-for="p in podium" :key="p.name" class="pod" :class="'p' + p.rank">
+          <span class="p-avatar">{{ p.avatar }}</span>
+          <strong>{{ p.name }}</strong>
+          <span class="p-km">{{ p.km }} km</span>
+        </div>
       </div>
-      <p><strong>2 km</strong> 内有 <strong>8</strong> 位同学正在运动<br /><span>去认识一下，约个伴？</span></p>
-      <router-link to="/features/sports-wall" class="view-btn">查看 ›</router-link>
+      <div class="me-row">
+        <span class="rank">{{ me.rank }}</span>
+        <span class="me-avatar">🧑‍🎓</span>
+        <strong>我</strong>
+        <span class="me-km">{{ me.km }} km</span>
+      </div>
     </section>
 
-    <!-- toast -->
     <transition name="fade">
       <div v-if="toast" class="toast">{{ toast }}</div>
     </transition>
@@ -108,31 +159,15 @@ function join(t) {
 </template>
 
 <style scoped>
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 14px;
-  border-radius: 999px;
-  color: var(--color-text-light);
-  font-size: 14px;
-}
-.page-tabs {
-  margin: 16px 2px 0;
-}
-.campus-banner {
-  margin-top: 14px;
-  border-radius: var(--radius);
-  padding: 14px 16px;
+/* ===== 校区信息条 ===== */
+.campus-bar {
   display: flex;
   align-items: center;
   gap: 10px;
-  background: linear-gradient(135deg, #3b82f6, var(--color-primary-dark));
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(46, 107, 255, 0.3);
+  padding: 13px 16px;
 }
 .pin {
-  font-size: 20px;
+  font-size: 18px;
 }
 .campus-info {
   flex: 1;
@@ -142,143 +177,276 @@ function join(t) {
 }
 .campus-info p {
   font-size: 12px;
-  opacity: 0.85;
+  color: var(--color-text-light);
   margin-top: 2px;
 }
+.campus-info b {
+  color: var(--color-primary);
+}
 .switch-btn {
-  border: none;
-  background: rgba(255, 255, 255, 0.22);
-  color: #fff;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text-light);
   font-size: 12px;
   padding: 6px 14px;
   border-radius: 999px;
 }
-.group-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px 6px;
-  padding: 16px 10px;
-}
-.group {
+
+/* ===== 今日约跑（横向卡片流） ===== */
+.meet-scroll {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.g-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
-  background: var(--color-primary-light);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-}
-.g-name {
-  font-size: 13px;
-}
-.g-online {
-  font-size: 10px;
-  color: var(--color-accent);
-}
-.team-list {
-  display: flex;
-  flex-direction: column;
   gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 2px 16px 8px;
 }
-.team-card {
+.meet-scroll::-webkit-scrollbar {
+  display: none;
+}
+.meet-card {
+  flex: 0 0 auto;
+  width: 172px;
+  border-radius: var(--radius);
+  padding: 13px 14px;
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+}
+.meet-card.mine {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+.meet-head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
+  gap: 7px;
 }
-.t-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+.meet-icon {
+  font-size: 19px;
+}
+.meet-sport {
+  font-size: 11px;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.meet-card.mine .meet-sport {
+  background: #fff;
+}
+.meet-title {
+  font-size: 14px;
+  margin-top: 9px;
+}
+.meet-when {
+  font-size: 12px;
+  color: var(--color-primary-dark);
+  font-weight: 600;
+  margin-top: 5px;
+}
+.meet-place {
+  font-size: 11px;
+  color: var(--color-text-light);
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.meet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 11px;
+}
+.meet-count {
+  font-size: 11px;
+  color: var(--color-text-light);
+}
+.meet-btn {
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--color-primary);
+}
+.meet-btn.joined {
+  background: #fff;
+  color: var(--color-primary-dark);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+/* ===== 跑团榜 ===== */
+.team-board {
+  padding: 6px 14px;
+}
+.team-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.team-row:last-child {
+  border-bottom: none;
+}
+.rank {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--color-bg);
+  color: var(--color-text-light);
+  font-size: 12px;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
+}
+.rank.r1 {
+  background: #fef3c7;
+  color: #b45309;
+}
+.rank.r2 {
+  background: #e7e9ee;
+  color: #5b6472;
+}
+.rank.r3 {
+  background: #fde8d7;
+  color: #b4632d;
 }
 .t-info {
   flex: 1;
   min-width: 0;
 }
 .t-info strong {
-  font-size: 15px;
+  font-size: 14px;
+}
+.t-info strong em {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+}
+.t-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-bg);
+  overflow: hidden;
+  margin: 6px 0 4px;
+}
+.t-fill {
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #17c9ae, var(--color-primary-dark));
 }
 .t-info p {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--color-text-light);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.join-btn {
+.t-btn {
+  flex-shrink: 0;
   border: none;
   border-radius: 999px;
-  padding: 7px 16px;
-  font-size: 13px;
+  padding: 6px 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #fff;
   background: var(--color-primary);
-  flex-shrink: 0;
 }
-.join-btn.joined {
-  background: #f0fdf4;
-  color: var(--color-accent);
-  box-shadow: inset 0 0 0 1.5px var(--color-accent);
-}
-.nearby {
-  margin-top: 14px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.avatars span {
-  display: inline-block;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+.t-btn.joined {
   background: var(--color-primary-light);
-  text-align: center;
-  line-height: 30px;
-  font-size: 15px;
-  margin-left: -8px;
-  border: 2px solid #fff;
+  color: var(--color-primary-dark);
 }
-.avatars span:first-child {
-  margin-left: 0;
+
+/* ===== 个人榜 ===== */
+.solo-board {
+  padding: 18px 14px 12px;
 }
-.nearby p {
+.podium {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 8px;
+}
+.pod {
   flex: 1;
-  font-size: 13px;
-  line-height: 1.5;
+  max-width: 104px;
+  border-radius: 12px;
+  padding: 10px 4px;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
 }
-.nearby p span {
-  color: var(--color-text-light);
+.pod.p1 {
+  background: linear-gradient(180deg, #fef3c7, #fde68a);
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+.pod.p3 {
+  background: #fde8d7;
+}
+.p-avatar {
+  font-size: 24px;
+}
+.pod strong {
   font-size: 12px;
 }
-.view-btn {
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
+.p-km {
+  font-size: 11px;
+  color: var(--color-text-light);
 }
+.pod.p1 .p-km {
+  color: #92400e;
+}
+.me-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--color-primary-light);
+}
+.me-row .rank {
+  background: #fff;
+  color: var(--color-primary-dark);
+}
+.me-avatar {
+  font-size: 18px;
+}
+.me-row strong {
+  flex: 1;
+  font-size: 14px;
+}
+.me-km {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+/* ===== toast ===== */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 120px;
+  bottom: 60px;
   transform: translateX(-50%);
-  background: rgba(23, 35, 61, 0.92);
+  background: rgba(15, 47, 44, 0.92);
   color: #fff;
   font-size: 13px;
   padding: 10px 20px;
   border-radius: 999px;
   z-index: 200;
+  white-space: nowrap;
 }
 .fade-enter-active,
 .fade-leave-active {
