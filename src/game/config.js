@@ -97,6 +97,12 @@ export const GAME_CONFIG = {
   // 移动步长（米 / 帧）
   moveStep: 10,
 
+  // 2.0 连续运动参数（模拟米 / 秒）
+  simulationStep: 1 / 30,
+  playerSpeed: 42,
+  mouseSpeed: 28,
+  aiCatSpeed: 34,
+
   // 刷新间隔（毫秒）
   tickInterval: 1000,
 

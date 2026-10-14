@@ -48,6 +48,10 @@ export function initGame(opts = {}) {
       boundaryPadding: cfg.boundaryPadding,
       catchThreshold: cfg.catchThreshold,
       moveStep: cfg.moveStep,
+      simulationStep: cfg.simulationStep,
+      playerSpeed: cfg.playerSpeed,
+      mouseSpeed: cfg.mouseSpeed,
+      aiCatSpeed: cfg.aiCatSpeed,
       obstacles: cfg.obstacles.map((obstacle) => ({ ...obstacle }))
     }
   }
@@ -299,6 +303,17 @@ export function resetGame(opts = {}) {
 export function getState() {
   if (!state) return null
   return JSON.parse(JSON.stringify(state))
+}
+
+/**
+ * 为新模拟器同步旧页面仍会读取的兼容字段。
+ * 新代码应继续以 players 为唯一角色数据源。
+ * @param {GameState} gameState
+ * @returns {GameState}
+ */
+export function syncLegacyFields(gameState) {
+  addLegacyFields(gameState)
+  return gameState
 }
 
 /**

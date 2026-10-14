@@ -3,19 +3,24 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   calcDistance,
-  getState,
-  initGame,
-  moveCharacter,
-  tick,
-  updateAi
+  initGame
 } from '@/game/engine.js'
-import { GAME_CONFIG } from '@/game/config.js'
+import {
+  advanceSimulation,
+  clampFrameDelta,
+  FIXED_STEP_SECONDS
+} from '@/game/simulation.js'
 import CampusMap from './components/CampusMap.vue'
 
 const router = useRouter()
 const state = ref(null)
 const ending = ref(false)
-let timerId = null
+const touchInput = ref({ x: 0, y: 0 })
+const pressedKeys = new Set()
+let animationFrameId = null
+let simulationStarted = false
+let lastFrameTime = null
+let accumulatedTime = 0
 
 const phase = computed(() => state.value?.phase ?? 'hiding')
 const players = computed(() => state.value?.players ?? [])
@@ -26,9 +31,10 @@ const mice = computed(() => players.value.filter((player) => player.role === 'mo
 const cats = computed(() => players.value.filter((player) => player.role === 'cat'))
 const timeLeft = computed(() => {
   if (!state.value) return 0
-  return phase.value === 'hiding'
+  const remaining = phase.value === 'hiding'
     ? state.value.hidingTimeLeft
     : state.value.chasingTimeLeft
+  return Math.max(0, Math.ceil(remaining))
 })
 const nearestMouseDistance = computed(() => {
   if (!humanCat.value || mice.value.length === 0) return 0
@@ -39,69 +45,111 @@ const nearestMouseDistance = computed(() => {
   ))
 })
 
-function moveCat(dx, dy) {
-  if (phase.value !== 'chasing' || ending.value) return
-  state.value = moveCharacter('cat', { dx, dy })
-  checkEnd()
+function currentInput() {
+  let x = touchInput.value.x
+  let y = touchInput.value.y
+  if (pressedKeys.has('ArrowLeft') || pressedKeys.has('KeyA')) x -= 1
+  if (pressedKeys.has('ArrowRight') || pressedKeys.has('KeyD')) x += 1
+  if (pressedKeys.has('ArrowUp') || pressedKeys.has('KeyW')) y -= 1
+  if (pressedKeys.has('ArrowDown') || pressedKeys.has('KeyS')) y += 1
+  return { x, y }
 }
 
-function advanceOneSecond() {
-  tick()
-  updateAi()
-  state.value = getState()
-  checkEnd()
+function runFrame(timestamp) {
+  animationFrameId = window.requestAnimationFrame(runFrame)
+  if (!simulationStarted || ending.value) {
+    lastFrameTime = timestamp
+    return
+  }
+  if (lastFrameTime === null) {
+    lastFrameTime = timestamp
+    return
+  }
+
+  accumulatedTime += clampFrameDelta((timestamp - lastFrameTime) / 1000)
+  lastFrameTime = timestamp
+  while (accumulatedTime >= FIXED_STEP_SECONDS && !ending.value) {
+    state.value = advanceSimulation(
+      state.value,
+      currentInput(),
+      FIXED_STEP_SECONDS
+    )
+    accumulatedTime -= FIXED_STEP_SECONDS
+    checkEnd()
+  }
 }
 
 function checkEnd() {
   if (!state.value || state.value.phase !== 'ended' || ending.value) return
   ending.value = true
-  stopTimer()
   window.setTimeout(() => router.push('/game/result'), 900)
 }
 
 function startMatch() {
   state.value = initGame()
   ending.value = false
+  accumulatedTime = 0
+  lastFrameTime = null
 }
 
-function startTimer() {
-  if (timerId) return
-  timerId = window.setInterval(advanceOneSecond, GAME_CONFIG.tickInterval)
-}
-
-function stopTimer() {
-  if (!timerId) return
-  window.clearInterval(timerId)
-  timerId = null
+function startSimulation() {
+  simulationStarted = true
+  lastFrameTime = null
 }
 
 function backToLobby() {
-  stopTimer()
   router.push('/game')
 }
 
-function onKey(event) {
-  const step = GAME_CONFIG.moveStep
-  const moves = {
-    ArrowUp: [0, -step],
-    ArrowDown: [0, step],
-    ArrowLeft: [-step, 0],
-    ArrowRight: [step, 0]
-  }
-  const move = moves[event.key]
-  if (!move) return
+function onKeyDown(event) {
+  const supported = [
+    'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+    'KeyW', 'KeyA', 'KeyS', 'KeyD'
+  ]
+  if (!supported.includes(event.code)) return
   event.preventDefault()
-  moveCat(...move)
+  pressedKeys.add(event.code)
+}
+
+function onKeyUp(event) {
+  pressedKeys.delete(event.code)
+}
+
+function holdDirection(x, y, event) {
+  event?.preventDefault()
+  if (phase.value !== 'chasing') return
+  touchInput.value = { x, y }
+}
+
+function releaseDirection() {
+  touchInput.value = { x: 0, y: 0 }
+}
+
+function onVisibilityChange() {
+  pressedKeys.clear()
+  releaseDirection()
+  lastFrameTime = null
+  accumulatedTime = 0
 }
 
 onMounted(() => {
   startMatch()
-  window.addEventListener('keydown', onKey)
+  animationFrameId = window.requestAnimationFrame(runFrame)
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
+  window.addEventListener('pointerup', releaseDirection)
+  window.addEventListener('pointercancel', releaseDirection)
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onBeforeUnmount(() => {
-  stopTimer()
-  window.removeEventListener('keydown', onKey)
+  simulationStarted = false
+  if (animationFrameId) window.cancelAnimationFrame(animationFrameId)
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
+  window.removeEventListener('pointerup', releaseDirection)
+  window.removeEventListener('pointercancel', releaseDirection)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
@@ -126,7 +174,7 @@ onBeforeUnmount(() => {
           :players="players"
           :config="state.config"
           :phase="phase"
-          @ready="startTimer"
+          @ready="startSimulation"
         />
         <div v-if="phase === 'ended'" class="end-overlay">
           <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
@@ -158,13 +206,13 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="status-card control-card">
-          <p>{{ phase === 'hiding' ? '躲藏阶段不可移动' : '方向键或按钮控制玩家猫' }}</p>
+          <p>{{ phase === 'hiding' ? '躲藏阶段不可移动' : '按住方向键 / WASD / 触屏方向持续移动' }}</p>
           <div class="dpad" :class="{ disabled: phase !== 'chasing' }">
-            <button @click="moveCat(0, -GAME_CONFIG.moveStep)" aria-label="向上">↑</button>
+            <button @pointerdown="holdDirection(0, -1, $event)" aria-label="向上">↑</button>
             <div>
-              <button @click="moveCat(-GAME_CONFIG.moveStep, 0)" aria-label="向左">←</button>
-              <button @click="moveCat(0, GAME_CONFIG.moveStep)" aria-label="向下">↓</button>
-              <button @click="moveCat(GAME_CONFIG.moveStep, 0)" aria-label="向右">→</button>
+              <button @pointerdown="holdDirection(-1, 0, $event)" aria-label="向左">←</button>
+              <button @pointerdown="holdDirection(0, 1, $event)" aria-label="向下">↓</button>
+              <button @pointerdown="holdDirection(1, 0, $event)" aria-label="向右">→</button>
             </div>
           </div>
         </section>

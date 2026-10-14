@@ -204,12 +204,13 @@ function centerOnHuman(force = true) {
   if (!human || !map) return
   followHuman.value = true
   programmaticMove = true
-  map.easeTo({
+  const options = {
     center: gameToLngLat(human.position, props.config),
-    duration: force ? 650 : 420,
+    duration: force ? 650 : 80,
     essential: true
-  })
-  window.setTimeout(() => { programmaticMove = false }, force ? 700 : 470)
+  }
+  map.easeTo(options)
+  window.setTimeout(() => { programmaticMove = false }, force ? 700 : 100)
 }
 
 function toggleCollisions() {
@@ -345,7 +346,7 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: #ffe898;
   box-shadow: 0 5px 16px rgba(16, 38, 29, 0.34);
-  transition: transform 0.45s ease;
+  transition: transform 0.09s linear;
 }
 .campus-role-marker .marker-face { font-size: 22px; line-height: 1; }
 .campus-role-marker .marker-direction {

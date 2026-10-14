@@ -169,12 +169,52 @@ try {
   }))()`)
   await screenshot('collision-debug.png')
 
-  const report = { url, initial, interaction, localScene, runtimeErrors }
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    const chasing = await evaluate(
+      `document.querySelector('.phase-timer span')?.textContent.trim() === '追捕'`
+    )
+    if (chasing) break
+    await sleep(100)
+  }
+  const beforeMove = await evaluate(`(() => {
+    const marker = document.querySelector('.campus-role-marker.is-human')
+    const rect = marker?.getBoundingClientRect()
+    return rect ? { x: rect.x, y: rect.y } : null
+  })()`)
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39
+  })
+  await sleep(800)
+  await command('Input.dispatchKeyEvent', {
+    type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39
+  })
+  await sleep(200)
+  const afterMove = await evaluate(`(() => {
+    const marker = document.querySelector('.campus-role-marker.is-human')
+    const rect = marker?.getBoundingClientRect()
+    return rect ? { x: rect.x, y: rect.y } : null
+  })()`)
+  const movement = {
+    before: beforeMove,
+    after: afterMove,
+    screenDistance: beforeMove && afterMove
+      ? Math.hypot(afterMove.x - beforeMove.x, afterMove.y - beforeMove.y)
+      : 0
+  }
+  await screenshot('continuous-movement.png')
+
+  const report = { url, initial, interaction, localScene, movement, runtimeErrors }
   await writeFile(
     path.join(artifactsDir, 'verification.json'),
     `${JSON.stringify(report, null, 2)}\n`
   )
   console.log(JSON.stringify(report, null, 2))
+  if (movement.screenDistance < 2) {
+    throw new Error('Continuous keyboard movement was not visible')
+  }
+  if (runtimeErrors.length > 0) {
+    throw new Error(`Browser runtime errors: ${runtimeErrors.join('; ')}`)
+  }
 } finally {
   socket.close()
   chrome.kill()
