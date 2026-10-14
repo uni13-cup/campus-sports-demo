@@ -177,6 +177,7 @@ if (gameState.value.phase === 'ended') {
 
 - 玩家猫与电脑鼠的距离进入 `catchThreshold` 后自动完成抓捕与阵营转换，并产生完整事件反馈；`confirmCapture()` 继续保留给旧调用方兼容使用。
 - 电脑猫在范围内仍自动确认，以便单机局可以自然结束。
+- 电脑鼠在道路图上从多个安全候选目标中按本局随机种子选择逃跑路线，并约每 0.8～1.6 秒重新规划；同一局可复现，不同局路线会变化。
 - `events` 是有长度上限的瞬时游戏事件队列，包含 `capture-candidate`、`capture-confirmed`、`role-converted` 和 `game-ended` 等事件。
 - 结算前使用 `saveGameResult()` 写入两小时有效的 `sessionStorage` 快照；快照仅含胜负和计分信息，不保存位置轨迹。
 

@@ -52,6 +52,7 @@ export function initGame(opts = {}) {
       playerSpeed: cfg.playerSpeed,
       mouseSpeed: cfg.mouseSpeed,
       aiCatSpeed: cfg.aiCatSpeed,
+      aiSeed: cfg.aiSeed,
       movementPresentation: { ...cfg.movementPresentation },
       obstacles: cfg.obstacles.map((obstacle) => ({ ...obstacle }))
     }

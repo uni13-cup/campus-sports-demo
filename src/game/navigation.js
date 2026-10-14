@@ -148,21 +148,38 @@ export function updateNavigatingAi(
 
   const aiPlayers = nextState.players.filter((player) => player.controller === 'ai')
   for (const player of aiPlayers) {
-    const goal = chooseGoal(nextState, player, graph)
-    if (!goal) continue
     const nav = nextState.navigation[player.id] ?? {
       path: [],
       index: 0,
       replanIn: 0,
-      goalKey: null
+      goalKey: null,
+      goal: null,
+      role: player.role,
+      randomState: initialRandomState(nextState.config.aiSeed, player.id)
     }
     nav.replanIn -= deltaSeconds
-    const goalKey = `${Math.round(goal.x / 12)},${Math.round(goal.y / 12)}`
-    if (nav.replanIn <= 0 || nav.goalKey !== goalKey || nav.index >= nav.path.length) {
-      nav.path = planRoadRoute(graph, player.position, goal)
-      nav.index = nav.path.length > 1 ? 1 : 0
-      nav.replanIn = player.role === 'cat' ? 0.45 : 0.7
-      nav.goalKey = goalKey
+    if (nav.role !== player.role) {
+      nav.path = []
+      nav.index = 0
+      nav.replanIn = 0
+      nav.goal = null
+      nav.role = player.role
+    }
+
+    let goal = nav.goal
+    if (player.role === 'cat') {
+      goal = chooseCatGoal(nextState, player)
+      if (!goal) continue
+      const goalKey = positionKey(goal)
+      if (nav.replanIn <= 0 || nav.goalKey !== goalKey || nav.index >= nav.path.length) {
+        setRoute(nav, graph, player.position, goal)
+        nav.replanIn = 0.45
+      }
+    } else if (nav.replanIn <= 0 || !goal || nav.index >= nav.path.length) {
+      goal = chooseMouseGoal(nextState, player, graph, nav)
+      if (!goal) continue
+      setRoute(nav, graph, player.position, goal)
+      nav.replanIn = 0.8 + nextRandom(nav) * 0.8
     }
     nextState.navigation[player.id] = nav
 
@@ -174,20 +191,20 @@ export function updateNavigatingAi(
   return syncLegacyFields(nextState)
 }
 
-function chooseGoal(gameState, player, graph) {
-  const cats = gameState.players.filter((item) => item.role === 'cat')
+function chooseCatGoal(gameState, player) {
   const mice = gameState.players.filter((item) => item.role === 'mouse')
-  if (player.role === 'cat') {
-    return mice
-      .map((mouse) => ({
-        position: mouse.position,
-        distance: calcDistance(player.position, mouse.position)
-      }))
-      .sort((left, right) => left.distance - right.distance)[0]?.position ?? null
-  }
+  return mice
+    .map((mouse) => ({
+      position: mouse.position,
+      distance: calcDistance(player.position, mouse.position)
+    }))
+    .sort((left, right) => left.distance - right.distance)[0]?.position ?? null
+}
 
+function chooseMouseGoal(gameState, player, graph, nav) {
+  const cats = gameState.players.filter((item) => item.role === 'cat')
   if (cats.length === 0) return null
-  return graph.nodes
+  const candidates = graph.nodes
     .map((node) => {
       const dangerDistance = Math.min(
         ...cats.map((cat) => calcDistance(node.position, cat.position))
@@ -195,7 +212,35 @@ function chooseGoal(gameState, player, graph) {
       const travelDistance = calcDistance(player.position, node.position)
       return { node, score: dangerDistance - travelDistance * 0.18 }
     })
-    .sort((left, right) => right.score - left.score)[0]?.node.position ?? null
+    .filter((candidate) => calcDistance(player.position, candidate.node.position) >= 24)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 8)
+  if (candidates.length === 0) return null
+  return candidates[Math.floor(nextRandom(nav) * candidates.length)].node.position
+}
+
+function setRoute(nav, graph, start, goal) {
+  nav.path = planRoadRoute(graph, start, goal)
+  nav.index = nav.path.length > 1 ? 1 : 0
+  nav.goal = { ...goal }
+  nav.goalKey = positionKey(goal)
+}
+
+function positionKey(position) {
+  return `${Math.round(position.x / 12)},${Math.round(position.y / 12)}`
+}
+
+function initialRandomState(seed, playerId) {
+  let value = Number.isFinite(seed) ? Math.trunc(seed) >>> 0 : 1
+  for (const character of playerId) {
+    value = Math.imul(value ^ character.charCodeAt(0), 16777619) >>> 0
+  }
+  return value || 1
+}
+
+function nextRandom(nav) {
+  nav.randomState = (Math.imul(nav.randomState, 1664525) + 1013904223) >>> 0
+  return nav.randomState / 4294967296
 }
 
 function moveToward(gameState, player, waypoint, deltaSeconds) {

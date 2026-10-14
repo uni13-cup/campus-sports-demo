@@ -58,3 +58,17 @@ test('navigating AI moves continuously and stays walkable', () => {
   assert.ok(isWalkablePosition(after, next.config))
   assert.ok(next.navigation['mouse-1'].path.length > 0)
 })
+
+test('different match seeds can produce different safe mouse routes', () => {
+  const goalKeys = new Set()
+  for (let seed = 1; seed <= 8; seed += 1) {
+    const state = initGame({ aiSeed: seed })
+    state.phase = 'chasing'
+    const next = updateNavigatingAi(state, 1 / 30)
+    const nav = next.navigation['mouse-1']
+    goalKeys.add(nav.goalKey)
+    assert.ok(nav.path.length > 0)
+    assert.ok(nav.path.every((position) => isWalkablePosition(position, next.config)))
+  }
+  assert.ok(goalKeys.size > 1)
+})

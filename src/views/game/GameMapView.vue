@@ -120,7 +120,7 @@ function checkEnd() {
 }
 
 function startMatch() {
-  state.value = initGame()
+  state.value = initGame({ aiSeed: Date.now() })
   ending.value = false
   accumulatedTime = 0
   lastFrameTime = null
