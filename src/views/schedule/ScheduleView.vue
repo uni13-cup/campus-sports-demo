@@ -2,28 +2,32 @@
 import { computed, ref } from 'vue'
 
 // 日程页：校园跑达标规划 + 课表 + AI 推荐运动时段（对应参考视频日程页）
-const goal = { total: 30, done: 11, km: 22.5, deadline: '12/31', leftDays: 79 }
+// 达标数据待接入（接入校园跑平台后自动填充）
+const goal = { total: 30, done: 0, km: 0, deadline: '--', leftDays: '--' }
 const progress = computed(() => Math.round((goal.done / goal.total) * 100))
 // SVG 圆环参数
 const R = 30
 const C = 2 * Math.PI * R
 const dashOffset = computed(() => C * (1 - progress.value / 100))
 
+// 课表数据待接入（接入教务课表后自动填充）
 const week = [
-  { day: '一', n: 4 }, { day: '二', n: 2 }, { day: '三', n: 3 },
-  { day: '四', n: 2 }, { day: '五', n: 2 }, { day: '六', n: 0 }, { day: '日', n: 0 }
+  { day: '一', n: 0 }, { day: '二', n: 0 }, { day: '三', n: 0 },
+  { day: '四', n: 0 }, { day: '五', n: 0 }, { day: '六', n: 0 }, { day: '日', n: 0 }
 ]
 const selectedDay = ref('二')
 
+// 日期行待接入（跟随当前周动态生成）
 const dates = [
-  { day: '一', d: 12 }, { day: '二', d: 13, today: true }, { day: '三', d: 14 },
-  { day: '四', d: 15 }, { day: '五', d: 16 }, { day: '六', d: 17 }, { day: '日', d: 18 }
+  { day: '一', d: '' }, { day: '二', d: '' }, { day: '三', d: '' },
+  { day: '四', d: '' }, { day: '五', d: '' }, { day: '六', d: '' }, { day: '日', d: '' }
 ]
 
+// 运动时段骨架（标签由课表推算后填充）
 const slots = [
-  { t: '06-08', tag: '★黄金', hot: true }, { t: '08-10' }, { t: '10-12' },
-  { t: '12-14', tag: '午休' }, { t: '14-16' }, { t: '16-18' },
-  { t: '18-20', tag: 'AI推荐', hot: true }, { t: '20-22' }
+  { t: '06-08' }, { t: '08-10' }, { t: '10-12' },
+  { t: '12-14' }, { t: '14-16' }, { t: '16-18' },
+  { t: '18-20' }, { t: '20-22' }
 ]
 const selectedSlot = ref('18-20')
 </script>
@@ -82,7 +86,7 @@ const selectedSlot = ref('18-20')
     <!-- AI 推算 -->
     <section class="ai-banner card">
       <span class="ai-icon">🪄</span>
-      <p><strong>AI 推算：</strong>本周有 7 天晚间 18:00-20:00 空闲，最适合校园跑，已为你高亮预留。</p>
+      <p><strong>AI 推算：</strong>接入课表后，将自动推算每周最适合校园跑的空闲时段。</p>
     </section>
 
     <!-- 本周日期 -->
@@ -97,7 +101,7 @@ const selectedSlot = ref('18-20')
     <!-- 运动时段 -->
     <div class="section-head">
       <h3>周{{ selectedDay }}运动安排</h3>
-      <span class="more">5 个空闲时段</span>
+      <span class="more">待接入课表</span>
     </div>
     <p class="slots-tip">根据课表自动推算你的可运动时间</p>
     <section class="slots">

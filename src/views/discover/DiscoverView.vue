@@ -5,22 +5,11 @@ import { ref } from 'vue'
 const tabs = ['关注', '社区', '兴趣活动']
 const activeTab = ref('社区')
 
-const groups = [
-  { icon: '⚽', name: '足球', online: 23 },
-  { icon: '🏸', name: '羽毛球', online: 18 },
-  { icon: '🏀', name: '篮球', online: 31 },
-  { icon: '🏃', name: '长跑', online: 45 },
-  { icon: '🚴', name: '骑行', online: 12 },
-  { icon: '🧘', name: '瑜伽', online: 9 },
-  { icon: '🥏', name: '飞盘', online: 15 },
-  { icon: '🏊', name: '游泳', online: 7 }
-]
+// 运动社群数据待接入
+const groups = []
 
-const teams = ref([
-  { icon: '🌙', bg: '#e3edff', name: '晨光夜跑团', desc: '128 人 · 本周已跑 340 km · 江东校区', joined: true },
-  { icon: '🏸', bg: '#e0f7e3', name: '羽你同行', desc: '64 人 · 每周三晚七操场集合', joined: false },
-  { icon: '🏆', bg: '#ffe8d9', name: '马拉松特训营', desc: '96 人 · 备战校马 · 教练带队', joined: false }
-])
+// 热门跑团数据待接入
+const teams = ref([])
 
 const toast = ref('')
 let toastTimer = null
@@ -54,8 +43,8 @@ function join(t) {
     <section class="campus-banner">
       <span class="pin">📍</span>
       <div class="campus-info">
-        <strong>本校区 · 江东校区</strong>
-        <p>2 公里内 86 位同学正在运动</p>
+        <strong>本校区</strong>
+        <p>接入定位后展示本校区实时运动动态</p>
       </div>
       <button class="switch-btn">切换</button>
     </section>
@@ -65,20 +54,21 @@ function join(t) {
       <h3>运动社群</h3>
       <span class="more">全部 ›</span>
     </div>
-    <section class="card group-grid">
+    <section v-if="groups.length" class="card group-grid">
       <div v-for="g in groups" :key="g.name" class="group">
         <span class="g-icon">{{ g.icon }}</span>
         <span class="g-name">{{ g.name }}</span>
         <span class="g-online">{{ g.online }} 在线</span>
       </div>
     </section>
+    <div v-else class="empty card">运动社群待接入</div>
 
     <!-- 热门跑团 -->
     <div class="section-head">
       <h3>热门跑团</h3>
       <router-link to="/features/sports-wall" class="more">搭子墙 ›</router-link>
     </div>
-    <section class="team-list">
+    <section v-if="teams.length" class="team-list">
       <div v-for="t in teams" :key="t.name" class="team-card card">
         <span class="t-icon" :style="{ background: t.bg }">{{ t.icon }}</span>
         <div class="t-info">
@@ -90,13 +80,12 @@ function join(t) {
         </button>
       </div>
     </section>
+    <div v-else class="empty card">跑团数据待接入</div>
 
     <!-- 附近的人 -->
     <section class="nearby card">
-      <div class="avatars">
-        <span v-for="e in ['🦊', '🐼', '🐨', '🦁']" :key="e">{{ e }}</span>
-      </div>
-      <p><strong>2 km</strong> 内有 <strong>8</strong> 位同学正在运动<br /><span>去认识一下，约个伴？</span></p>
+      <span class="nearby-icon">🏃</span>
+      <p><strong>附近动态</strong><br /><span>接入定位后，发现正在运动的同学</span></p>
       <router-link to="/features/sports-wall" class="view-btn">查看 ›</router-link>
     </section>
 
@@ -239,20 +228,22 @@ function join(t) {
   align-items: center;
   gap: 12px;
 }
-.avatars span {
-  display: inline-block;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--color-primary-light);
+.empty {
   text-align: center;
-  line-height: 30px;
-  font-size: 15px;
-  margin-left: -8px;
-  border: 2px solid #fff;
+  color: var(--color-text-light);
+  font-size: 13px;
+  padding: 28px 16px;
 }
-.avatars span:first-child {
-  margin-left: 0;
+.nearby-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--color-primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 .nearby p {
   flex: 1;

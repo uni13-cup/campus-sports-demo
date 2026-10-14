@@ -16,39 +16,8 @@ const entries = [
 const chips = ['精选', '体测提分', '减脂塑形', '新手入门']
 const activeChip = ref('精选')
 
-const courses = [
-  {
-    level: 'K1', badge: '免费', bg: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
-    title: '八百米达标 · 呼吸节奏入门',
-    meta: 'K1 零基础 · 12 分钟 · 评分 9.1',
-    desc: '体育教研组官方课 · 新手跑姿打底'
-  },
-  {
-    level: 'K2', badge: '免费', bg: 'linear-gradient(135deg,#14b8a6,#0f766e)',
-    title: '一千米满分冲刺 · 间歇训练',
-    meta: 'K2 初学 · 20 分钟 · 评分 8.7',
-    desc: '体测提分必备 · 400 米 × 4 组'
-  },
-  {
-    level: 'K3', badge: '直播中', bg: 'linear-gradient(135deg,#f97316,#dc2626)',
-    title: '夜跑燃脂 · 校园环线跟练',
-    meta: 'K3 进阶 · 45 分钟 · 328 人在练',
-    desc: '学长带跑 · 操场集合'
-  },
-  {
-    level: 'K1', badge: '免费', bg: 'linear-gradient(135deg,#22c55e,#15803d)',
-    title: '跑前热身 · 动态激活 8 式',
-    meta: 'K1 零基础 · 8 分钟 · 评分 9.3',
-    desc: '避免受伤 · 每次开跑前必做'
-  },
-  {
-    level: 'K2', badge: '主题跑', bg: 'linear-gradient(135deg,#8b5cf6,#6d28d9)',
-    title: '校园地标主题探索跑',
-    meta: 'K2 路线 · 打卡校园地标 · 评分 9.5',
-    desc: '边跑边逛 · 解锁地标徽章',
-    to: '/features/theme-run'
-  }
-]
+// 课程数据待接入（由内容/后端填充后展示）
+const courses = []
 </script>
 
 <template>
@@ -91,7 +60,7 @@ const courses = [
     </div>
 
     <!-- 课程卡片列表 -->
-    <div class="course-list">
+    <div v-if="courses.length" class="course-list">
       <component
         :is="c.to ? 'router-link' : 'div'"
         v-for="c in courses"
@@ -110,6 +79,7 @@ const courses = [
         </div>
       </component>
     </div>
+    <div v-else class="empty card">课程内容待接入</div>
   </div>
 </template>
 
@@ -166,6 +136,13 @@ const courses = [
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+.empty {
+  margin-top: 14px;
+  text-align: center;
+  color: var(--color-text-light);
+  font-size: 13px;
+  padding: 32px 16px;
 }
 .course-card {
   display: flex;

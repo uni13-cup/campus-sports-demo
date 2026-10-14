@@ -1,8 +1,9 @@
 <script setup>
 // 我的页：用户信息 + 会员 + 数据概览环 + AI 洞察（对应参考视频我的页）
+// 用户数据待接入（接入账号体系后自动填充）
 const rings = [
   { label: '饮食', value: '--', pct: 0 },
-  { label: '训练', value: '2', pct: 0.66 },
+  { label: '训练', value: '--', pct: 0 },
   { label: '睡眠', value: '--', pct: 0 }
 ]
 const R = 26
@@ -22,23 +23,23 @@ const quicks = [
     <section class="user-card">
       <span class="avatar">🧑‍🎓</span>
       <div class="user-info">
-        <h3>偶尔调皮的_CampusRunner ›</h3>
+        <h3>未设置昵称 ›</h3>
         <p>0 关注&ensp;0 粉丝&ensp;0 加油</p>
       </div>
     </section>
 
-    <!-- 徽章行 -->
+    <!-- 徽章行（数据接入后填充） -->
     <section class="badge-row">
-      <span>🏅 K5 · 新升级</span>
-      <span>🏆 27 新挑战</span>
-      <span>⚡ 累计运动 128 天</span>
+      <span>🏅 等级 --</span>
+      <span>🏆 挑战 --</span>
+      <span>⚡ 累计运动 -- 天</span>
     </section>
 
     <!-- 会员卡 -->
     <section class="vip-card">
       <div class="vip-info">
-        <strong>👑 CampusRun · 校园会员</strong>
-        <p>体测冲刺计划 · 私教课 5 折</p>
+        <strong>👑 校园会员</strong>
+        <p>开通后享专属权益</p>
       </div>
       <button class="vip-btn">立即开通</button>
     </section>
@@ -76,7 +77,7 @@ const quicks = [
     <!-- AI 洞察 -->
     <router-link to="/features/ai-pacer" class="ai-card card">
       <p class="ai-title">🪄 AI 洞察</p>
-      <p class="ai-text">今天有待提升，训练刺激仍可加强</p>
+      <p class="ai-text">接入训练数据后，展示每日 AI 分析</p>
       <span class="ai-link">查看完整分析 ›</span>
     </router-link>
 
