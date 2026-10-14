@@ -43,6 +43,8 @@ export function initGame(opts = {}) {
     config: {
       mapWidth: cfg.mapWidth,
       mapHeight: cfg.mapHeight,
+      geoBounds: { ...cfg.geoBounds },
+      coordinateSystem: cfg.coordinateSystem,
       boundaryPadding: cfg.boundaryPadding,
       catchThreshold: cfg.catchThreshold,
       moveStep: cfg.moveStep,

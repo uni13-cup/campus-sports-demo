@@ -1,3 +1,68 @@
+import { ACTIVITY_GEO_BOUNDS } from './campus.js'
+import { lngLatToGame, measureGeoBounds } from './coordinates.js'
+import { CAMPUS_BUILDING_BOUNDS, CAMPUS_SCENE } from './data/campus-data.js'
+
+const activitySize = measureGeoBounds(ACTIVITY_GEO_BOUNDS)
+const activityConfig = {
+  mapWidth: activitySize.width,
+  mapHeight: activitySize.height,
+  geoBounds: ACTIVITY_GEO_BOUNDS
+}
+
+function geometryBounds(feature) {
+  const coordinates = []
+  function collect(value) {
+    if (!Array.isArray(value)) return
+    if (
+      value.length >= 2 &&
+      Number.isFinite(value[0]) &&
+      Number.isFinite(value[1])
+    ) {
+      coordinates.push(value)
+      return
+    }
+    value.forEach(collect)
+  }
+  collect(feature.geometry.coordinates)
+  return {
+    id: feature.id,
+    osmId: feature.properties.osmId,
+    kind: feature.properties.kind,
+    west: Math.min(...coordinates.map(([longitude]) => longitude)),
+    south: Math.min(...coordinates.map(([, latitude]) => latitude)),
+    east: Math.max(...coordinates.map(([longitude]) => longitude)),
+    north: Math.max(...coordinates.map(([, latitude]) => latitude))
+  }
+}
+
+const waterBounds = CAMPUS_SCENE.features
+  .filter((feature) => feature.properties.kind === 'water')
+  .map(geometryBounds)
+
+const campusObstacles = [
+  ...CAMPUS_BUILDING_BOUNDS.map((building) => ({ ...building, kind: 'building' })),
+  ...waterBounds
+]
+  .map((building) => {
+    const northWest = lngLatToGame([building.west, building.north], activityConfig)
+    const southEast = lngLatToGame([building.east, building.south], activityConfig)
+    const x = Math.max(0, northWest.x)
+    const y = Math.max(0, northWest.y)
+    const right = Math.min(activitySize.width, southEast.x)
+    const bottom = Math.min(activitySize.height, southEast.y)
+
+    return {
+      id: building.id,
+      osmId: building.osmId,
+      kind: building.kind,
+      x,
+      y,
+      width: Math.max(0, right - x),
+      height: Math.max(0, bottom - y)
+    }
+  })
+  .filter((obstacle) => obstacle.width > 0 && obstacle.height > 0)
+
 /**
  * 游戏配置常量
  *
@@ -6,9 +71,11 @@
  * 其他人请勿修改本文件的具体参数。
  */
 export const GAME_CONFIG = {
-  // 地图范围（模拟坐标，单位：米）
-  mapWidth: 500,
-  mapHeight: 400,
+  // 活动范围使用本地米制模拟坐标，不代表真实 GPS 定位。
+  mapWidth: activitySize.width,
+  mapHeight: activitySize.height,
+  geoBounds: ACTIVITY_GEO_BOUNDS,
+  coordinateSystem: 'simulated-local-meters',
 
   // 角色中心与地图边缘的最小距离，对应页面中的虚线活动边界
   boundaryPadding: 20,
@@ -35,13 +102,13 @@ export const GAME_CONFIG = {
 
   // 固定出生点（虚拟坐标，不代表真实 GPS）
   spawnPoints: {
-    cat: { x: 400, y: 350 },
+    cat: { x: 180, y: 260 },
     mice: [
-      { x: 60, y: 80 },
-      { x: 60, y: 320 },
-      { x: 180, y: 80 },
-      { x: 315, y: 90 },
-      { x: 370, y: 175 }
+      { x: 260, y: 80 },
+      { x: 540, y: 250 },
+      { x: 650, y: 160 },
+      { x: 360, y: 180 },
+      { x: 550, y: 80 }
     ]
   },
 
@@ -51,11 +118,6 @@ export const GAME_CONFIG = {
     obstacle: 10
   },
 
-  // 建筑障碍物；矩形内部及边界均不可进入
-  obstacles: [
-    { id: 'obstacle-1', x: 220, y: 30, width: 85, height: 55 },
-    { id: 'obstacle-2', x: 220, y: 110, width: 85, height: 55 },
-    { id: 'obstacle-3', x: 220, y: 190, width: 85, height: 55 },
-    { id: 'obstacle-4', x: 340, y: 220, width: 120, height: 80 }
-  ]
+  // 第一阶段碰撞仍是建筑/水体外包矩形近似，并非真实多边形碰撞。
+  obstacles: campusObstacles
 }

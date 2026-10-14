@@ -3,13 +3,13 @@
 ## 当前规则
 
 - 单机模拟演示，不使用真实 GPS、后端或多人联机。
-- 地图采用 `500 × 400` 二维虚拟坐标，左上角是 `(0, 0)`。
+- 地图逻辑采用约 `763.4 × 306.1` 米的本地二维模拟坐标，左上角是 `(0, 0)`，`x` 向东、`y` 向南。
 - 1 只玩家猫追捕 5 只电脑鼠。
 - 躲藏阶段 5 秒，猫不能移动，电脑鼠自动分散。
 - 追捕阶段 30 秒，猫鼠距离小于或等于 15 个虚拟米时自动抓捕。
 - 被抓的鼠转为电脑猫，从下一次 AI 更新开始协助追捕。
 - 全部鼠被抓时猫方获胜；追捕倒计时结束仍有鼠存活时鼠方获胜。
-- 灰色障碍区域不可进入；其余区域可移动。
+- OSM 建筑对应的矩形近似障碍不可进入；其余区域可移动。
 - 猫和鼠的中心坐标均被限制在虚线活动边界内。
 
 ## 推荐接口
@@ -25,6 +25,12 @@ import {
   isWalkablePosition,
   resetGame
 } from '@/game/engine.js'
+
+import {
+  gameToLngLat,
+  lngLatToGame,
+  measureGeoBounds
+} from '@/game/coordinates.js'
 ```
 
 | 接口 | 输入 | 返回 | 用途 |
@@ -37,6 +43,8 @@ import {
 | `calcDistance(a, b)` | 两个坐标 | 精确距离 | 计算二维直线距离 |
 | `isWalkablePosition(position, config?)` | 坐标、可选配置 | 布尔值 | 判断边界和建筑碰撞 |
 | `resetGame(options?)` | 可选配置覆盖项 | 全新初始状态 | 重新开始 |
+| `gameToLngLat(position, config)` | 游戏坐标、配置 | `[longitude, latitude]` | 游戏逻辑位置转 WGS84 地图位置 |
+| `lngLatToGame(lngLat, config)` | 经纬度、配置 | `{x,y}` | WGS84 地图位置转游戏坐标 |
 
 以上接口不会依赖 DOM。传入状态的接口返回新对象，不直接修改 Vue 当前持有的状态。
 
@@ -50,7 +58,7 @@ import {
       id: 'cat-1',
       role: 'cat', // cat | mouse
       controller: 'human', // human | ai
-      position: { x: 400, y: 350 },
+      position: { x: 180, y: 260 },
       captures: 0
     }
   ],
@@ -59,8 +67,15 @@ import {
   winner: null, // cat | mouse | null
   endReason: null, // all-mice-caught | timeout | manual | null
   config: {
-    mapWidth: 500,
-    mapHeight: 400,
+    mapWidth: 763.4044462128343,
+    mapHeight: 306.12859968138207,
+    geoBounds: {
+      west: 113.8112,
+      south: 34.7844,
+      east: 113.81955,
+      north: 34.78715
+    },
+    coordinateSystem: 'simulated-local-meters',
     catchThreshold: 15,
     moveStep: 10,
     obstacles: []
@@ -118,24 +133,25 @@ onBeforeUnmount(() => {
 
 不要同时使用页面自己的 `setInterval` 和引擎的旧 `startTimer()`，否则倒计时会被重复推进。
 
-## 地图渲染
+## 地图渲染与数据
 
-角色坐标可转成 CSS 百分比：
+`CampusMap.vue` 使用 MapLibre GL JS 渲染本地 GeoJSON，不依赖 DOM 参与游戏距离或抓捕计算。角色位置统一通过 `gameToLngLat()` 转换：
 
 ```js
-function toPercent(position, config) {
-  return {
-    left: `${position.x / config.mapWidth * 100}%`,
-    top: `${position.y / config.mapHeight * 100}%`
-  }
-}
+const lngLat = gameToLngLat(player.position, gameState.value.config)
 ```
 
+- 数据来自 OpenStreetMap 官方 Map API 对郑东校区范围的提取，生成脚本为 `scripts/generate-campus-scene.mjs`。
+- 本地数据文件为 `src/game/data/campus-data.js`，包含道路、建筑、绿化、运动区域和水体，不包含运行时在线瓦片依赖。
+- 页面必须保留可见的 `© OpenStreetMap contributors · ODbL 1.0` 署名。
+- 地图不渲染地标文字；名称只保留在数据属性中用于核验。
 - `players` 中 `role === 'cat'` 的角色显示为猫。
 - `role === 'mouse'` 的角色显示为鼠。
 - `controller === 'human'` 的猫应有明显玩家标识。
-- `config.obstacles` 可绘制成不带地标名称的建筑碰撞层。
+- `config.obstacles` 是 OSM 建筑多边形的外包矩形近似，可通过页面“碰撞范围”开关核对。
 - HUD 建议显示当前阶段、当前阶段剩余时间、存活鼠数量和玩家猫抓捕数。
+- MapLibre 支持缩放、旋转和最大 `65°` 倾斜；默认镜头倾斜约 `38°`，并支持玩家跟随与全场视野。
+- 地图完成本地场景加载后才开始 5 秒躲藏倒计时，避免首次加载占用游戏时间。
 
 当前阶段时间：
 
@@ -168,15 +184,19 @@ gameState.value = resetGame()
 在仓库根目录运行：
 
 ```powershell
-node --test src/game/engine.test.js
+node --test src/game/engine.test.js src/game/coordinates.test.js
 npm run build
+node scripts/verify-campus-map.mjs http://127.0.0.1:4173/game/play
 ```
 
-截至 2026-10-13，逻辑测试共 23 项，覆盖初始化、移动、地图边界、建筑碰撞、距离、抓捕边界、阵营转换、倒计时、胜负、重置、电脑 AI 和完整回合。
+截至 2026-10-14，共 27 项测试通过：原有 24 项游戏规则测试全部保留，新增 3 项坐标范围、经纬度往返和坐标顺序测试。浏览器验证脚本还会检查本地地图画布、6 个角色、MapLibre 控件、OSM 署名、缩放、全场视野和碰撞调试层。
 
 ## 当前限制
 
 - AI 采用简单的直线追逐、逃离和局部绕障，不是完整寻路算法。
 - 所有坐标和距离均为模拟数据，不代表真实 GPS 定位。
+- 建筑碰撞仍使用目标点与外包矩形判断，不是真实多边形碰撞，也没有解决高速移动穿越障碍的问题。
+- 本轮角色逻辑仍按 1 秒更新；视觉标记有过渡，但尚未实现第二阶段的连续速度模型。
+- OSM 数据覆盖反映提取时的公开地图状态，可能与校园现场细节存在差异；需要通过生成脚本人工刷新和复核。
 - 没有房间、账号、服务器、数据库或实时多人同步。
-- 页面仍需由李金燚根据 `players` 数组改为多角色渲染。
+- 模块级旧接口和传入状态的纯函数接口仍同时保留，本轮未统一，避免破坏现有页面兼容性。

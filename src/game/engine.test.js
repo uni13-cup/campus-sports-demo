@@ -42,8 +42,11 @@ test('moveCharacter returns a new state and moves the player cat while chasing',
   const catAfter = moved.players.find((player) => player.id === 'cat-1')
 
   assert.notEqual(moved, initial)
-  assert.deepEqual(catBefore.position, { x: 400, y: 350 })
-  assert.deepEqual(catAfter.position, { x: 410, y: 345 })
+  assert.deepEqual(catBefore.position, GAME_CONFIG.spawnPoints.cat)
+  assert.deepEqual(catAfter.position, {
+    x: GAME_CONFIG.spawnPoints.cat.x + 10,
+    y: GAME_CONFIG.spawnPoints.cat.y - 5
+  })
 })
 
 test('moveCharacter keeps a role inside the activity boundary', () => {
@@ -61,17 +64,18 @@ test('moveCharacter keeps a role inside the activity boundary', () => {
 })
 
 test('positions outside the activity boundary are not walkable', () => {
+  const boundaryOnlyConfig = { ...GAME_CONFIG, obstacles: [] }
   assert.equal(
     isWalkablePosition(
       { x: GAME_CONFIG.boundaryPadding, y: GAME_CONFIG.boundaryPadding },
-      GAME_CONFIG
+      boundaryOnlyConfig
     ),
     true
   )
   assert.equal(
     isWalkablePosition(
       { x: GAME_CONFIG.boundaryPadding - 1, y: GAME_CONFIG.boundaryPadding },
-      GAME_CONFIG
+      boundaryOnlyConfig
     ),
     false
   )
@@ -133,12 +137,16 @@ test('configured spawn points keep the agreed safety distances', () => {
 test('moveCharacter rejects movement into a building', () => {
   const initial = { ...initGame(), phase: 'chasing' }
   const cat = initial.players.find((player) => player.id === 'cat-1')
-  cat.position = { x: 210, y: 50 }
+  const obstacle = initial.config.obstacles[0]
+  cat.position = {
+    x: obstacle.x - 10,
+    y: obstacle.y + obstacle.height / 2
+  }
 
   const moved = moveCharacter(initial, 'cat-1', { dx: 20, dy: 0 })
   const catAfter = moved.players.find((player) => player.id === 'cat-1')
 
-  assert.deepEqual(catAfter.position, { x: 210, y: 50 })
+  assert.deepEqual(catAfter.position, cat.position)
 })
 
 test('checkCaptures converts a mouse exactly at the catch threshold', () => {
@@ -280,8 +288,8 @@ test('updateAi makes a mouse flee from its nearest cat while chasing', () => {
   const updated = updateAi(initial, () => 0)
   const mouse = updated.players.find((player) => player.id === 'mouse-1')
 
-  assert.ok(mouse.position.x > 130)
-  assert.equal(mouse.position.y, 100)
+  assert.ok(mouse.position.x > 280)
+  assert.equal(mouse.position.y, 200)
 })
 
 test('updateAi makes a converted computer cat chase the nearest mouse', () => {
@@ -292,14 +300,14 @@ test('updateAi makes a converted computer cat chase the nearest mouse', () => {
       id: 'cat-1',
       role: 'cat',
       controller: 'human',
-      position: { x: 450, y: 350 },
+      position: { x: 450, y: 250 },
       captures: 0
     },
     {
       id: 'mouse-1',
       role: 'cat',
       controller: 'ai',
-      position: { x: 100, y: 100 },
+      position: { x: 200, y: 200 },
       capturedAt: 25,
       captures: 0
     },
@@ -307,7 +315,7 @@ test('updateAi makes a converted computer cat chase the nearest mouse', () => {
       id: 'mouse-2',
       role: 'mouse',
       controller: 'ai',
-      position: { x: 140, y: 100 },
+      position: { x: 240, y: 200 },
       capturedAt: null
     }
   ]
@@ -315,20 +323,32 @@ test('updateAi makes a converted computer cat chase the nearest mouse', () => {
   const updated = updateAi(initial, () => 0)
   const computerCat = updated.players.find((player) => player.id === 'mouse-1')
 
-  assert.ok(computerCat.position.x > 100)
-  assert.equal(computerCat.position.y, 100)
+  assert.ok(computerCat.position.x > 200)
+  assert.equal(computerCat.position.y, 200)
 })
 
 test('updateAi never moves a computer role into a building', () => {
   const initial = createCaptureState(110)
-  initial.players[0].position = { x: 100, y: 50 }
-  initial.players[1].position = { x: 210, y: 50 }
+  const obstacle = initial.config.obstacles.find(
+    (item) => item.x > 150 && item.y > initial.config.boundaryPadding
+  )
+  initial.players[0].position = {
+    x: obstacle.x - 120,
+    y: obstacle.y + obstacle.height / 2
+  }
+  initial.players[1].position = {
+    x: obstacle.x - 10,
+    y: obstacle.y + obstacle.height / 2
+  }
 
   const updated = updateAi(initial, () => 0)
   const mouse = updated.players.find((player) => player.id === 'mouse-1')
 
   assert.equal(isWalkablePosition(mouse.position, updated.config), true)
-  assert.notDeepEqual(mouse.position, { x: 220, y: 50 })
+  assert.notDeepEqual(mouse.position, {
+    x: obstacle.x,
+    y: obstacle.y + obstacle.height / 2
+  })
 })
 
 test('a complete round can progress from hiding to cat victory and reset', () => {
@@ -377,7 +397,7 @@ function createCaptureState(distance) {
   const state = initGame()
   state.phase = 'chasing'
   state.players = state.players.slice(0, 2)
-  state.players[0].position = { x: 100, y: 100 }
-  state.players[1].position = { x: 100 + distance, y: 100 }
+  state.players[0].position = { x: 250, y: 200 }
+  state.players[1].position = { x: 250 + distance, y: 200 }
   return state
 }

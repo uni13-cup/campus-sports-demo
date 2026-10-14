@@ -1,0 +1,40 @@
+{
+  "url": "http://127.0.0.1:4174/game/play",
+  "initial": {
+    "title": "猫鼠大作战 · 对战 | 校园运动平台",
+    "canvas": {
+      "x": 35,
+      "y": 77.25,
+      "width": 1086,
+      "height": 678,
+      "top": 77.25,
+      "right": 1121,
+      "bottom": 755.25,
+      "left": 35
+    },
+    "markers": 6,
+    "playerMarkers": 1,
+    "controls": 3,
+    "attribution": "OpenStreetMap campus data · ODbL 1.0",
+    "status": [
+      "本地校园场景",
+      "146 个 OSM 要素",
+      "模拟定位"
+    ],
+    "mapDebug": null,
+    "mapErrors": []
+  },
+  "interaction": {
+    "zoomClicked": true,
+    "fullViewClicked": true,
+    "collisionClicked": true
+  },
+  "localScene": {
+    "markers": 6,
+    "canvasWidth": 1086,
+    "canvasHeight": 678,
+    "collisionActive": true,
+    "phaseTime": "3"
+  },
+  "runtimeErrors": []
+}
