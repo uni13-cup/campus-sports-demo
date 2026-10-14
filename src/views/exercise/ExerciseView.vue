@@ -1,84 +1,162 @@
 <script setup>
-import { computed, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useRun } from '@/verify/useRun'
 
-// 运动页：模拟地图轨迹 + 跑步模式 + 陪跑模式 + GO 计时（对应参考视频运动页）
+// 运动页：真实传感器核验 + 趣味玩法入口
+// 负责人：李浩阳
+//
+// 和第一版最大的区别：这里四个数字不再是本地计时器编出来的，
+// 而是来自 useRun()——手机加速度传感器 50Hz 采样，判定通过才累计里程。
+const run = useRun()
+const {
+  running,
+  okKm,
+  okSec,
+  speed,
+  cadence,
+  verdict,
+  sensorState,
+  useSim,
+  scenario,
+  scenarios
+} = run
+
+const sports = ['校园跑', '户外行走', '体测模拟']
+const activeSport = ref('校园跑')
 const modes = ['目标跑', '自由跑', '课程跑', '自定义']
 const activeMode = ref('自由跑')
 
-const sports = [
-  { icon: '➕', label: '更多运动' },
-  { icon: '🏃', label: '校园跑', active: true },
-  { icon: '🚶', label: '户外行走' },
-  { icon: '⏱️', label: '体测模拟' }
-]
-
-// GO 计时（演示用本地计时，非真实 GPS）
-const running = ref(false)
-const seconds = ref(0)
-let timer = null
+const kmText = computed(() => okKm.value.toFixed(2))
 
 const durationText = computed(() => {
-  const m = String(Math.floor(seconds.value / 60)).padStart(2, '0')
-  const s = String(seconds.value % 60).padStart(2, '0')
+  const t = Math.floor(okSec.value)
+  const m = String(Math.floor(t / 60)).padStart(2, '0')
+  const s = String(t % 60).padStart(2, '0')
   return `${m}:${s}`
 })
-const kmText = computed(() => (seconds.value * 0.0035).toFixed(2))
-const kcalText = computed(() => Math.round(seconds.value * 0.18))
-const paceText = computed(() => (seconds.value === 0 ? `5'57"` : `6'0${seconds.value % 10}'`))
 
-function toggleRun() {
-  running.value = !running.value
-  if (running.value) {
-    timer = setInterval(() => seconds.value++, 1000)
-  } else {
-    clearInterval(timer)
+// 配速由步频估出来的速度换算：60 / (公里每小时) = 每公里几分钟
+const paceText = computed(() => {
+  if (speed.value < 0.5) return `--'--"`
+  const p = 60 / speed.value
+  const mi = Math.floor(p)
+  const se = String(Math.round((p - mi) * 60)).padStart(2, '0')
+  return `${mi}'${se}"`
+})
+
+const kcalText = computed(() => Math.round(okKm.value * 62))
+
+const sensorText = computed(() => {
+  if (useSim.value) return '演示数据（模拟）'
+  switch (sensorState.value) {
+    case 'requesting':
+      return '正在申请传感器权限…'
+    case 'on':
+      return '传感器已连接'
+    case 'denied':
+      return '未授权传感器'
+    case 'nodata':
+      return '本机没读到传感器'
+    default:
+      return '传感器待启动'
   }
+})
+
+const dotCls = computed(() => {
+  if (useSim.value) return 'sim'
+  return sensorState.value === 'on' ? 'on' : 'off'
+})
+
+const hintText = computed(() => {
+  if (useSim.value) return '当前是演示数据（模拟），不会计入真实成绩。'
+  if (sensorState.value === 'nodata') {
+    return '电脑一般没有运动传感器，请换手机打开；也可以先切到「演示数据（模拟）」看效果。'
+  }
+  if (sensorState.value === 'denied') {
+    return 'iPhone 需要 Safari 打开 https 页面才能授权传感器。'
+  }
+  return ''
+})
+
+function toggle() {
+  if (running.value) run.stop()
+  else run.start()
 }
-onUnmounted(() => clearInterval(timer))
+
+function pickScenario(key) {
+  scenario.value = key
+}
 </script>
 
 <template>
   <div class="page exercise-page">
-    <!-- 模拟地图 -->
-    <section class="map-card">
-      <svg class="map-svg" viewBox="0 0 360 200">
-        <rect width="360" height="200" fill="#e8f0e4" />
-        <ellipse cx="70" cy="60" rx="46" ry="30" fill="#d3e7c8" />
-        <ellipse cx="290" cy="40" rx="52" ry="26" fill="#d3e7c8" />
-        <ellipse cx="300" cy="150" rx="40" ry="24" fill="#cfe0f2" />
-        <path
-          d="M60,130 C60,80 120,70 180,80 C240,90 300,80 310,120 C318,155 240,170 170,160 C100,150 60,160 60,130 Z"
-          fill="none" stroke="#2e6bff" stroke-width="4" stroke-linecap="round"
-        />
-        <circle cx="180" cy="80" r="7" fill="#fff" stroke="#2e6bff" stroke-width="4" />
-      </svg>
-      <div class="map-actions">
-        <button class="map-btn">🛰️<span>GPS</span></button>
-        <button class="map-btn">👥<span>组队</span></button>
-        <button class="map-btn">🗺️<span>路线</span></button>
+    <!-- 数据板：配速做主数字，其余三个次之 -->
+    <section class="dash" :class="verdict.cls">
+      <div class="dash-top">
+        <span>{{ useSim ? '演示数据 · 模拟' : '实时核验' }}</span>
+        <span>{{ running ? `步频 ${cadence} 步/分` : '未开始' }}</span>
+      </div>
+      <div class="dash-pace">
+        <strong>{{ paceText }}</strong>
+        <span>配速 / 公里</span>
+      </div>
+      <div class="dash-nums">
+        <div><strong>{{ kmText }}</strong><span>公里</span></div>
+        <div><strong>{{ durationText }}</strong><span>时长</span></div>
+        <div><strong>{{ kcalText }}</strong><span>千卡</span></div>
+      </div>
+      <div class="dash-verify">
+        <span class="dot" :class="dotCls"></span>
+        <span class="v-txt">{{ sensorText }}</span>
+        <span class="judge" :class="verdict.cls">{{ verdict.txt }}</span>
       </div>
     </section>
 
-    <!-- 模式 pills -->
-    <div class="mode-pills card">
+    <p v-if="hintText" class="hint">{{ hintText }}</p>
+
+    <!-- 动作行 -->
+    <div class="action-row">
+      <button class="mini-btn">🎵<span>音乐</span></button>
+      <button class="run-btn" :class="{ running }" @click="toggle">
+        {{ running ? '结束跑步' : '开始跑步' }}
+      </button>
+      <button class="mini-btn">🎒<span>装备</span></button>
+    </div>
+
+    <!-- 数据源：真实传感器 / 演示数据 -->
+    <div class="src-row">
+      <button class="src-btn" :class="{ active: !useSim }" @click="run.toggleSim(false)">
+        真实传感器
+      </button>
+      <button class="src-btn" :class="{ active: useSim }" @click="run.toggleSim(true)">
+        演示数据（模拟）
+      </button>
+    </div>
+    <div v-if="useSim" class="chips scenario-chips">
       <button
-        v-for="m in modes"
-        :key="m"
-        class="pill"
-        :class="{ active: activeMode === m }"
-        @click="activeMode = m"
-      >{{ m }}</button>
+        v-for="s in scenarios"
+        :key="s.key"
+        class="chip"
+        :class="{ active: scenario === s.key }"
+        @click="pickScenario(s.key)"
+      >{{ s.label }}</button>
     </div>
 
-    <!-- 运动类型 -->
-    <div class="sport-row card">
-      <div v-for="s in sports" :key="s.label" class="sport" :class="{ active: s.active }">
-        <span class="sport-icon">{{ s.icon }}</span>
-        <span>{{ s.label }}</span>
+    <!-- 原理入口 -->
+    <router-link to="/verify" class="verify-link card">
+      <span class="vl-icon">🛡️</span>
+      <div class="vl-text">
+        <strong>这一步是怎么判出来的？</strong>
+        <p>加速度波形 → 自相关找步频 → 五类判定，点开看原理和实时波形</p>
       </div>
-    </div>
+      <span class="vl-arrow">›</span>
+    </router-link>
 
-    <!-- 特色玩法：猫鼠大作战入口 -->
+    <!-- 趣味玩法 -->
+    <div class="section-head">
+      <h3>趣味玩法</h3>
+      <span class="more">校园跑不无聊</span>
+    </div>
     <router-link to="/game" class="game-entry">
       <span class="game-emoji">🐱🐭</span>
       <div class="game-info">
@@ -87,136 +165,298 @@ onUnmounted(() => clearInterval(timer))
       </div>
       <span class="go-arrow">›</span>
     </router-link>
-
-    <!-- 陪跑模式 -->
     <router-link to="/features/ai-pacer" class="pacer-row card">
       <span class="pacer-label">陪跑模式</span>
       <span class="pacer-value">🤖 语音轻松跑 · 自由版 ›</span>
     </router-link>
+    <router-link to="/features/theme-run" class="pacer-row card">
+      <span class="pacer-label">校园地标主题跑</span>
+      <span class="pacer-value">🗺️ 打卡地标 · 解锁徽章 ›</span>
+    </router-link>
 
-    <!-- 数据统计 -->
-    <div class="stats card">
-      <div class="stat"><strong>{{ kmText }}</strong><span>公里</span></div>
-      <div class="stat"><strong>{{ kcalText }}</strong><span>千卡</span></div>
-      <div class="stat"><strong>{{ durationText }}</strong><span>时长</span></div>
-      <div class="stat"><strong>{{ paceText }}</strong><span>配速</span></div>
-    </div>
+    <!-- 运动类型 + 跑步模式 -->
+    <section class="card setup-card">
+      <div class="setup-row">
+        <span class="setup-label">运动</span>
+        <div class="chips">
+          <button
+            v-for="s in sports"
+            :key="s"
+            class="chip"
+            :class="{ active: activeSport === s }"
+            @click="activeSport = s"
+          >{{ s }}</button>
+        </div>
+      </div>
+      <div class="setup-row">
+        <span class="setup-label">模式</span>
+        <div class="chips">
+          <button
+            v-for="m in modes"
+            :key="m"
+            class="chip"
+            :class="{ active: activeMode === m }"
+            @click="activeMode = m"
+          >{{ m }}</button>
+        </div>
+      </div>
+    </section>
 
-    <!-- GO -->
-    <div class="go-row">
-      <button class="side-btn">🎵<span>音乐</span></button>
-      <button class="go-btn" :class="{ running }" @click="toggleRun">
-        {{ running ? '暂停' : 'GO' }}
-      </button>
-      <button class="side-btn">🎒<span>装备</span></button>
-    </div>
+    <!-- 工具行 -->
+    <section class="card tools">
+      <button class="tool"><span>🛰️</span>GPS 轨迹</button>
+      <button class="tool"><span>👥</span>组队开跑</button>
+      <button class="tool"><span>🗺️</span>路线推荐</button>
+    </section>
   </div>
 </template>
 
 <style scoped>
 .exercise-page {
-  padding-top: 12px;
+  padding-top: 14px;
 }
-.map-card {
+
+/* ===== 数据板 ===== */
+.dash {
   position: relative;
-  border-radius: var(--radius);
   overflow: hidden;
-  box-shadow: var(--shadow);
+  border-radius: 22px;
+  padding: 16px 18px 14px;
+  color: #fff;
+  background: linear-gradient(155deg, #14544d 0%, #0d3b37 55%, #0f2f2c 100%);
+  box-shadow: 0 10px 26px rgba(15, 47, 44, 0.22);
+  transition: box-shadow 0.25s;
 }
-.map-svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-.map-actions {
+.dash::after {
+  content: '';
   position: absolute;
-  top: 12px;
-  right: 10px;
+  width: 240px;
+  height: 240px;
+  right: -80px;
+  top: -120px;
+  background: radial-gradient(circle, rgba(23, 201, 174, 0.5), rgba(23, 201, 174, 0) 70%);
+  pointer-events: none;
+}
+.dash.ok {
+  box-shadow: 0 10px 26px rgba(14, 163, 148, 0.36);
+}
+.dash.bad {
+  box-shadow: 0 10px 26px rgba(239, 68, 68, 0.28);
+}
+.dash-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.66);
+}
+.dash-pace {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+.dash-pace strong {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+.dash-pace span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.dash-nums {
+  position: relative;
+  display: flex;
+  gap: 28px;
+  padding-bottom: 12px;
+}
+.dash-nums div {
   display: flex;
   flex-direction: column;
+  gap: 1px;
+}
+.dash-nums strong {
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+}
+.dash-nums span {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.dash-verify {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 12px;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94a3a0;
+  flex-shrink: 0;
+}
+.dot.on {
+  background: #2ee6a8;
+  box-shadow: 0 0 0 3px rgba(46, 230, 168, 0.18);
+}
+.dot.sim {
+  background: #fbbf24;
+}
+.dot.off {
+  background: #f87171;
+}
+.v-txt {
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.judge {
+  margin-left: auto;
+  flex-shrink: 0;
+  white-space: nowrap;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.12);
+}
+.judge.ok {
+  background: rgba(46, 230, 168, 0.22);
+  color: #6ff0c8;
+}
+.judge.bad {
+  background: rgba(248, 113, 113, 0.22);
+  color: #ffb4b4;
+}
+
+/* ===== 提示 ===== */
+.hint {
+  margin-top: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #9a5b16;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+/* ===== 动作行 ===== */
+.action-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mini-btn {
+  width: 56px;
+  height: 52px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 17px;
+}
+.mini-btn span {
+  font-size: 10px;
+  color: var(--color-text-light);
+}
+.run-btn {
+  flex: 1;
+  height: 52px;
+  border: none;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #14c8ae, var(--color-primary-dark));
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  box-shadow: 0 8px 18px rgba(7, 120, 109, 0.28);
+}
+.run-btn.running {
+  background: linear-gradient(135deg, #f87171, #dc2626);
+  box-shadow: 0 8px 18px rgba(220, 38, 38, 0.26);
+}
+
+/* ===== 数据源 ===== */
+.src-row {
+  margin-top: 12px;
+  display: flex;
   gap: 8px;
 }
-.map-btn {
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.92);
-  font-size: 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  box-shadow: var(--shadow);
-}
-.map-btn span {
-  font-size: 9px;
-  color: var(--color-text-light);
-}
-.mode-pills {
-  margin-top: 12px;
-  display: flex;
-  gap: 6px;
-  padding: 6px;
+.src-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
   border-radius: 999px;
-}
-.pill {
-  flex: 1;
-  border: none;
-  border-radius: 999px;
-  background: none;
-  padding: 8px 0;
-  font-size: 13px;
-  color: var(--color-text-light);
-}
-.pill.active {
-  background: var(--color-dark);
-  color: #fff;
-  font-weight: 600;
-}
-.sport-row {
-  margin-top: 12px;
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 10px;
-}
-.sport {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
+  padding: 6px 14px;
   font-size: 12px;
   color: var(--color-text-light);
-  width: 25%;
 }
-.sport-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--color-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-}
-.sport.active {
+.src-btn.active {
+  border-color: var(--color-primary);
   color: var(--color-primary);
+  background: var(--color-primary-light);
   font-weight: 600;
 }
-.sport.active .sport-icon {
-  background: var(--color-primary-light);
-  box-shadow: inset 0 0 0 1.5px var(--color-primary);
+.scenario-chips {
+  margin-top: 10px;
 }
-.game-entry {
+
+/* ===== 原理入口 ===== */
+.verify-link {
   margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--color-text);
+}
+.vl-icon {
+  font-size: 20px;
+}
+.vl-text {
+  flex: 1;
+  min-width: 0;
+}
+.vl-text strong {
+  font-size: 14px;
+}
+.vl-text p {
+  font-size: 11px;
+  color: var(--color-text-light);
+  margin-top: 3px;
+  line-height: 1.5;
+}
+.vl-arrow {
+  font-size: 20px;
+  color: var(--color-text-light);
+}
+
+/* ===== 趣味玩法 ===== */
+.game-entry {
   display: flex;
   align-items: center;
   gap: 12px;
   border-radius: var(--radius);
   padding: 14px 16px;
-  background: linear-gradient(135deg, #1b2a4a, #2e4a8f);
+  background: linear-gradient(135deg, #f59e0b, #ea580c);
   color: #fff;
-  box-shadow: 0 8px 20px rgba(27, 42, 74, 0.3);
+  box-shadow: 0 8px 20px rgba(234, 88, 12, 0.24);
 }
 .game-emoji {
   font-size: 26px;
@@ -230,15 +470,15 @@ onUnmounted(() => clearInterval(timer))
 }
 .game-info p {
   font-size: 12px;
-  opacity: 0.75;
+  opacity: 0.85;
   margin-top: 2px;
 }
 .go-arrow {
   font-size: 22px;
-  opacity: 0.7;
+  opacity: 0.8;
 }
 .pacer-row {
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -253,60 +493,49 @@ onUnmounted(() => clearInterval(timer))
   color: var(--color-text-light);
   font-size: 13px;
 }
-.stats {
-  margin-top: 12px;
-  display: flex;
-  padding: 14px 8px;
-}
-.stat {
-  flex: 1;
+
+/* ===== 运动 / 模式 ===== */
+.setup-card {
+  margin-top: 14px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 2px;
+  gap: 10px;
 }
-.stat strong {
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-.stat span {
-  font-size: 11px;
-  color: var(--color-text-light);
-}
-.go-row {
-  margin-top: 16px;
+.setup-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 28px;
+  gap: 10px;
 }
-.go-btn {
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  border: none;
-  background: linear-gradient(135deg, #4d86ff, var(--color-primary-dark));
-  color: #fff;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  box-shadow: 0 10px 24px rgba(46, 107, 255, 0.45);
+.setup-label {
+  width: 30px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-light);
 }
-.go-btn.running {
-  background: linear-gradient(135deg, #f97316, #dc2626);
-  box-shadow: 0 10px 24px rgba(249, 115, 22, 0.45);
+.setup-row .chips {
+  flex: 1;
+  min-width: 0;
 }
-.side-btn {
+
+/* ===== 工具行 ===== */
+.tools {
+  margin-top: 12px;
+  display: flex;
+  padding: 12px 8px;
+}
+.tool {
+  flex: 1;
   border: none;
   background: none;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
-  font-size: 18px;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-text);
 }
-.side-btn span {
-  font-size: 11px;
-  color: var(--color-text-light);
+.tool span {
+  font-size: 18px;
 }
 </style>
