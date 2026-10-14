@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRun } from '@/verify/useRun'
 
-// 运动页：真实传感器核验 + 趣味玩法入口
+// 运动页：真实传感器核验 + 跑步控制
 // 负责人：李浩阳
 //
 // 和第一版最大的区别：这里四个数字不再是本地计时器编出来的，
@@ -150,28 +150,6 @@ function pickScenario(key) {
         <p>加速度波形 → 自相关找步频 → 五类判定，点开看原理和实时波形</p>
       </div>
       <span class="vl-arrow">›</span>
-    </router-link>
-
-    <!-- 趣味玩法 -->
-    <div class="section-head">
-      <h3>趣味玩法</h3>
-      <span class="more">校园跑不无聊</span>
-    </div>
-    <router-link to="/game/play" class="game-entry">
-      <span class="game-emoji">🐱🐭</span>
-      <div class="game-info">
-        <strong>校园猫鼠大作战</strong>
-        <p>模拟追逐 · 真实判定 · 和好友在校园地图上开一局</p>
-      </div>
-      <span class="go-arrow">›</span>
-    </router-link>
-    <router-link to="/features/ai-pacer" class="pacer-row card">
-      <span class="pacer-label">陪跑模式</span>
-      <span class="pacer-value">🤖 语音轻松跑 · 自由版 ›</span>
-    </router-link>
-    <router-link to="/features/theme-run" class="pacer-row card">
-      <span class="pacer-label">校园地标主题跑</span>
-      <span class="pacer-value">🗺️ 打卡地标 · 解锁徽章 ›</span>
     </router-link>
 
     <!-- 运动类型 + 跑步模式 -->
@@ -445,53 +423,6 @@ function pickScenario(key) {
 .vl-arrow {
   font-size: 20px;
   color: var(--color-text-light);
-}
-
-/* ===== 趣味玩法 ===== */
-.game-entry {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
-  color: #fff;
-  box-shadow: 0 8px 20px rgba(234, 88, 12, 0.24);
-}
-.game-emoji {
-  font-size: 26px;
-}
-.game-info {
-  flex: 1;
-  min-width: 0;
-}
-.game-info strong {
-  font-size: 15px;
-}
-.game-info p {
-  font-size: 12px;
-  opacity: 0.85;
-  margin-top: 2px;
-}
-.go-arrow {
-  font-size: 22px;
-  opacity: 0.8;
-}
-.pacer-row {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 13px 16px;
-  font-size: 14px;
-}
-.pacer-label {
-  font-weight: 600;
-  color: var(--color-text);
-}
-.pacer-value {
-  color: var(--color-text-light);
-  font-size: 13px;
 }
 
 /* ===== 运动 / 模式 ===== */
