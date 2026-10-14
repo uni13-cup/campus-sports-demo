@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   calcDistance,
@@ -11,17 +11,23 @@ import {
   FIXED_STEP_SECONDS
 } from '@/game/simulation.js'
 import { updateNavigatingAi } from '@/game/navigation.js'
+import { confirmCapture, updateCaptureFlow } from '@/game/capture.js'
+import { saveGameResult } from '@/game/result-store.js'
 import CampusMap from './components/CampusMap.vue'
 
 const router = useRouter()
 const state = ref(null)
 const ending = ref(false)
 const touchInput = ref({ x: 0, y: 0 })
+const muted = ref(false)
+const feedback = ref('')
 const pressedKeys = new Set()
 let animationFrameId = null
 let simulationStarted = false
 let lastFrameTime = null
 let accumulatedTime = 0
+let feedbackTimer = null
+let audioContext = null
 
 const phase = computed(() => state.value?.phase ?? 'hiding')
 const players = computed(() => state.value?.players ?? [])
@@ -45,6 +51,10 @@ const nearestMouseDistance = computed(() => {
     )
   ))
 })
+const captureCandidate = computed(() => state.value?.captureCandidate ?? null)
+const candidateMouse = computed(() =>
+  players.value.find((player) => player.id === captureCandidate.value?.mouseId)
+)
 
 function currentInput() {
   let x = touchInput.value.x
@@ -74,7 +84,10 @@ function runFrame(timestamp) {
       state.value,
       currentInput(),
       FIXED_STEP_SECONDS,
-      { aiUpdater: updateNavigatingAi }
+      {
+        aiUpdater: updateNavigatingAi,
+        captureUpdater: updateCaptureFlow
+      }
     )
     accumulatedTime -= FIXED_STEP_SECONDS
     checkEnd()
@@ -84,6 +97,9 @@ function runFrame(timestamp) {
 function checkEnd() {
   if (!state.value || state.value.phase !== 'ended' || ending.value) return
   ending.value = true
+  saveGameResult(state.value)
+  showFeedback(state.value.winner === 'cat' ? '全部老鼠已抓获！' : '追捕时间结束')
+  playFeedback('end')
   window.setTimeout(() => router.push('/game/result'), 900)
 }
 
@@ -110,6 +126,7 @@ function onKeyDown(event) {
   ]
   if (!supported.includes(event.code)) return
   event.preventDefault()
+  unlockAudio()
   pressedKeys.add(event.code)
 }
 
@@ -120,7 +137,56 @@ function onKeyUp(event) {
 function holdDirection(x, y, event) {
   event?.preventDefault()
   if (phase.value !== 'chasing') return
+  unlockAudio()
   touchInput.value = { x, y }
+}
+
+function confirmCandidate() {
+  const candidate = captureCandidate.value
+  if (!candidate) return
+  unlockAudio()
+  const beforeRole = candidateMouse.value?.role
+  state.value = confirmCapture(state.value, candidate.mouseId, candidate.catId)
+  const converted = state.value.players.find((player) => player.id === candidate.mouseId)
+  if (beforeRole === 'mouse' && converted?.role === 'cat') {
+    showFeedback('抓捕成功，电脑鼠已加入猫阵营')
+    playFeedback('capture')
+  }
+  checkEnd()
+}
+
+function showFeedback(message) {
+  feedback.value = message
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+  feedbackTimer = window.setTimeout(() => { feedback.value = '' }, 1800)
+}
+
+function unlockAudio() {
+  if (muted.value || audioContext) return
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return
+  audioContext = new AudioContextClass()
+  audioContext.resume?.()
+}
+
+function playFeedback(type) {
+  if (muted.value || !audioContext) return
+  const oscillator = audioContext.createOscillator()
+  const gain = audioContext.createGain()
+  oscillator.type = 'sine'
+  oscillator.frequency.value = type === 'capture' ? 720 : 420
+  gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
+  gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.02)
+  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22)
+  oscillator.connect(gain).connect(audioContext.destination)
+  oscillator.start()
+  oscillator.stop(audioContext.currentTime + 0.24)
+}
+
+function toggleMute() {
+  muted.value = !muted.value
+  if (muted.value) audioContext?.suspend?.()
+  else audioContext?.resume?.()
 }
 
 function releaseDirection() {
@@ -152,6 +218,15 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointerup', releaseDirection)
   window.removeEventListener('pointercancel', releaseDirection)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  if (feedbackTimer) window.clearTimeout(feedbackTimer)
+  audioContext?.close?.()
+})
+
+watch(captureCandidate, (candidate, previous) => {
+  if (candidate && candidate.mouseId !== previous?.mouseId) {
+    showFeedback('已进入抓捕范围，请确认模拟触碰')
+    playFeedback('candidate')
+  }
 })
 </script>
 
@@ -178,6 +253,11 @@ onBeforeUnmount(() => {
           :phase="phase"
           @ready="startSimulation"
         />
+        <div v-if="feedback" class="game-feedback" role="status">{{ feedback }}</div>
+        <div v-if="captureCandidate && phase === 'chasing'" class="capture-prompt">
+          <span>🐭 {{ candidateMouse?.id }} 已进入 {{ Math.round(captureCandidate.distance) }}m 抓捕范围</span>
+          <button @click="confirmCandidate">模拟触碰确认</button>
+        </div>
         <div v-if="phase === 'ended'" class="end-overlay">
           <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
           <span>正在前往结算页</span>
@@ -217,6 +297,9 @@ onBeforeUnmount(() => {
               <button @pointerdown="holdDirection(1, 0, $event)" aria-label="向右">→</button>
             </div>
           </div>
+          <button class="sound-toggle" @click="toggleMute">
+            {{ muted ? '🔇 声音已关闭' : '🔊 事件提示音' }}
+          </button>
         </section>
 
         <p class="collision-note">建筑碰撞目前采用 OSM 建筑外包矩形近似，可在地图内开启“碰撞范围”核对。</p>
@@ -334,6 +417,57 @@ onBeforeUnmount(() => {
 .dpad button:active { transform: translateY(1px); }
 .dpad.disabled { opacity: 0.38; pointer-events: none; }
 .collision-note { margin: 0 4px; color: #7f9188; font-size: 9px; line-height: 1.55; }
+.game-feedback {
+  position: absolute;
+  z-index: 5;
+  top: 72px;
+  left: 50%;
+  padding: 9px 14px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(20, 58, 43, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 750;
+  box-shadow: 0 8px 22px rgba(15, 48, 35, 0.22);
+}
+.capture-prompt {
+  position: absolute;
+  z-index: 5;
+  left: 50%;
+  bottom: 28px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: 13px;
+  background: rgba(255, 248, 222, 0.95);
+  color: #6f5100;
+  font-size: 10px;
+  box-shadow: 0 12px 32px rgba(47, 37, 12, 0.2);
+}
+.capture-prompt button {
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 9px;
+  background: #ef503d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sound-toggle {
+  margin-top: 10px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: #edf5f0;
+  color: #4e6e5f;
+  font-size: 9px;
+  cursor: pointer;
+}
 .end-overlay {
   position: absolute;
   z-index: 4;

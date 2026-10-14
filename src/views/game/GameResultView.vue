@@ -2,6 +2,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getState } from '@/game/engine.js'
+import { clearGameResult, loadGameResult } from '@/game/result-store.js'
 
 const router = useRouter()
 const result = ref(null)
@@ -16,10 +17,11 @@ const playerCaptures = computed(() =>
 )
 
 onMounted(() => {
-  result.value = getState()
+  result.value = loadGameResult() ?? getState()
 })
 
 function playAgain() {
+  clearGameResult()
   router.push('/game/play')
 }
 

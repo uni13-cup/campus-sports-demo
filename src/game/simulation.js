@@ -123,7 +123,10 @@ export function advanceSimulation(
   const aiUpdater = options.aiUpdater ?? updateAiContinuous
   nextState = aiUpdater(nextState, deltaSeconds)
   nextState = tickGame(nextState, deltaSeconds)
-  if (nextState.phase === 'chasing') nextState = checkCaptures(nextState).state
+  if (nextState.phase === 'chasing') {
+    const captureUpdater = options.captureUpdater ?? ((current) => checkCaptures(current).state)
+    nextState = captureUpdater(nextState, deltaSeconds)
+  }
   return syncLegacyFields(nextState)
 }
 

@@ -173,6 +173,13 @@ if (gameState.value.phase === 'ended') {
 }
 ```
 
+## 2.0 抓捕与事件
+
+- 玩家猫进入 `catchThreshold` 后，状态会产生 `captureCandidate`，页面显示“模拟触碰确认”。确认后才会执行玩家抓捕与阵营转换。
+- 电脑猫在范围内仍自动确认，以便单机局可以自然结束。
+- `events` 是有长度上限的瞬时游戏事件队列，包含 `capture-candidate`、`capture-confirmed`、`role-converted` 和 `game-ended` 等事件。
+- 结算前使用 `saveGameResult()` 写入两小时有效的 `sessionStorage` 快照；快照仅含胜负和计分信息，不保存位置轨迹。
+
 点击“再来一局”时直接执行：
 
 ```js
