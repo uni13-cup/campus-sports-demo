@@ -4,6 +4,39 @@ import { computed, ref } from 'vue'
 // 操场页：东校区约跑 → 跑团榜（团队排名）→ 个人榜
 // 负责人：李浩阳（原页面由李金燚创建，本次换掉社群九宫格与跑团列表的呈现方式）
 
+// 关注的人
+const following = ref([
+  { name: '王同学', avatar: '🦊', live: true },
+  { name: '李同学', avatar: '🐼', live: false },
+  { name: '张同学', avatar: '🐨', live: true },
+  { name: '赵同学', avatar: '🦁', live: false },
+  { name: '陈同学', avatar: '🐯', live: false }
+])
+
+// 社区动态
+const posts = ref([
+  {
+    author: '王同学', avatar: '🦊', time: '10 分钟前',
+    text: '今天操场 5 公里打卡，配速又进了 10 秒！💪',
+    likes: 23, liked: false, comments: 5
+  },
+  {
+    author: '李同学', avatar: '🐼', time: '32 分钟前',
+    text: '约了晚跑的小伙伴，操场南门集合，有人一起来吗？',
+    likes: 12, liked: false, comments: 8
+  },
+  {
+    author: '张同学', avatar: '🐨', time: '1 小时前',
+    text: '猫鼠大作战太好玩了，被追着跑了两公里哈哈哈',
+    likes: 41, liked: true, comments: 15
+  }
+])
+
+function toggleLike(p) {
+  p.liked = !p.liked
+  p.likes += p.liked ? 1 : -1
+}
+
 const campus = '东校区'
 const onlineCount = 86
 
@@ -76,6 +109,45 @@ function joinTeam(t) {
       </div>
       <button class="switch-btn">切换</button>
     </section>
+
+    <!-- 关注的人 -->
+    <div class="section-head">
+      <h3>关注</h3>
+      <span class="more">{{ following.length }} 人</span>
+    </div>
+    <div class="follow-scroll">
+      <div v-for="f in following" :key="f.name" class="follow-item">
+        <div class="avatar-wrap" :class="{ live: f.live }">
+          <span class="avatar">{{ f.avatar }}</span>
+          <span v-if="f.live" class="live-dot"></span>
+        </div>
+        <span class="follow-name">{{ f.name }}</span>
+      </div>
+    </div>
+
+    <!-- 社区动态 -->
+    <div class="section-head">
+      <h3>社区</h3>
+      <span class="more">校园动态 ›</span>
+    </div>
+    <div class="post-list">
+      <article v-for="(p, i) in posts" :key="i" class="post-card card">
+        <div class="post-head">
+          <span class="avatar">{{ p.avatar }}</span>
+          <div class="post-author">
+            <strong>{{ p.author }}</strong>
+            <span>{{ p.time }}</span>
+          </div>
+        </div>
+        <p class="post-text">{{ p.text }}</p>
+        <div class="post-actions">
+          <button class="post-btn" :class="{ liked: p.liked }" @click="toggleLike(p)">
+            {{ p.liked ? '❤️' : '🤍' }} {{ p.likes }}
+          </button>
+          <button class="post-btn">💬 {{ p.comments }}</button>
+        </div>
+      </article>
+    </div>
 
     <!-- 今日约跑 -->
     <div class="section-head">
@@ -432,6 +504,116 @@ function joinTeam(t) {
   font-size: 13px;
   font-weight: 700;
   color: var(--color-primary-dark);
+}
+
+/* ===== 关注的人 ===== */
+.follow-scroll {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin: 0 -16px;
+  padding: 4px 16px 12px;
+}
+.follow-scroll::-webkit-scrollbar {
+  display: none;
+}
+.follow-item {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.avatar-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  border: 2px solid var(--color-primary-light);
+}
+.avatar-wrap.live {
+  border-color: #ef4444;
+}
+.live-dot {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ef4444;
+  border: 2px solid var(--color-bg-card);
+}
+.follow-name {
+  font-size: 11px;
+  color: var(--color-text-light);
+}
+
+/* ===== 社区动态 ===== */
+.post-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.post-card {
+  padding: 14px;
+}
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.post-head .avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.post-author {
+  display: flex;
+  flex-direction: column;
+}
+.post-author strong {
+  font-size: 14px;
+}
+.post-author span {
+  font-size: 11px;
+  color: var(--color-text-light);
+}
+.post-text {
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 10px 0 12px;
+  color: var(--color-text);
+}
+.post-actions {
+  display: flex;
+  gap: 16px;
+}
+.post-btn {
+  border: none;
+  background: none;
+  font-size: 13px;
+  color: var(--color-text-light);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.post-btn.liked {
+  color: #ef4444;
 }
 
 /* ===== toast ===== */

@@ -2,24 +2,23 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-// 顶部导航（替代原来的底部五 Tab + 中央凸起圆钮）
-// 负责人：李浩阳
+// 顶部导航（四个主 Tab：趣味玩法 / 跑步 / 发现 / 我的）
 const route = useRoute()
 const router = useRouter()
 
 const tabs = [
-  { to: '/exercise', label: '开跑', hot: true },
-  { to: '/schedule', label: '计划' },
-  { to: '/discover', label: '操场' },
+  { to: '/play', label: '趣味玩法' },
+  { to: '/run', label: '跑步', hot: true },
+  { to: '/discover', label: '发现' },
   { to: '/profile', label: '我的' }
 ]
 
-// 五个主页面之外算详情页，顶部补一个返回
+// 主页面之外算详情页，顶部补一个返回
 const showBack = computed(() => route.meta?.tab !== true)
 
 function goBack() {
   if (window.history.length > 1) router.back()
-  else router.push('/courses')
+  else router.push('/play')
 }
 </script>
 
@@ -28,7 +27,7 @@ function goBack() {
     <div class="nav-inner">
       <div class="nav-top">
         <button v-if="showBack" class="back-btn" @click="goBack">‹ 返回</button>
-        <router-link to="/exercise" class="brand">
+        <router-link to="/play" class="brand">
           <span class="brand-mark"></span>
           <span class="brand-name">趣跑校园</span>
         </router-link>

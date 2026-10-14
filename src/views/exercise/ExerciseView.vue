@@ -157,7 +157,7 @@ function pickScenario(key) {
       <h3>趣味玩法</h3>
       <span class="more">校园跑不无聊</span>
     </div>
-    <router-link to="/game" class="game-entry">
+    <router-link to="/game/play" class="game-entry">
       <span class="game-emoji">🐱🐭</span>
       <div class="game-info">
         <strong>校园猫鼠大作战</strong>

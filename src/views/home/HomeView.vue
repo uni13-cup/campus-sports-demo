@@ -5,7 +5,7 @@ const router = useRouter()
 
 const modules = [
   { name: '运动搭子墙', desc: '一个人跑不动，两个人就能出门', icon: '👥', path: '/features/sports-wall', featured: false },
-  { name: '校园猫鼠大作战', desc: '真人版猫追鼠，跑起来才不会被抓', icon: '🐱', path: '/game', featured: true },
+  { name: '校园猫鼠大作战', desc: '真人版猫追鼠，跑起来才不会被抓', icon: '🐱', path: '/game/play', featured: true },
   { name: '能量消费联盟', desc: '跑步攒下的能量，能在校园里花出去', icon: '⚡', path: '/features/energy-league', featured: false },
   { name: '校园地标主题探索跑', desc: '把校园跑成一条路线，不再是绕圈', icon: '🗺️', path: '/features/theme-run', featured: false },
   { name: 'AI角色智能陪跑', desc: '跑步的时候有人说话，比一个人戴耳机强', icon: '🤖', path: '/features/ai-pacer', featured: false }

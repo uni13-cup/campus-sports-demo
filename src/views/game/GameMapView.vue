@@ -132,7 +132,7 @@ function startSimulation() {
 }
 
 function backToLobby() {
-  router.push('/game')
+  router.push('/play')
 }
 
 function onKeyDown(event) {

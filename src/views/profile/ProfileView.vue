@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 // 我的页：达标进度 → 名下数据 → 核验记录 → 成就徽章 → 我的队伍 → 快捷入口
 // 负责人：李浩阳（原页面由李金燚创建，本次换成校园跑口径，去掉会员/睡眠等无关模块）
@@ -28,8 +28,16 @@ const gotCount = badges.filter((b) => b.got).length
 
 const team = { name: 'A 队', rank: 2, km: 68.4, members: ['同学甲', '同学乙', '同学丙'] }
 
+// 我的跑步计划
+const plan = ref([
+  { day: '周一', name: '操场 5km 慢跑', done: true },
+  { day: '周三', name: '间歇跑 3km', done: true },
+  { day: '周五', name: '猫鼠大作战', done: false },
+  { day: '周日', name: '自由跑 3km', done: false }
+])
+
 const quicks = [
-  { icon: '📚', label: '我的课程', to: '/courses' },
+  { icon: '🎮', label: '趣味玩法', to: '/play' },
   { icon: '👥', label: '搭子墙', to: '/features/sports-wall' },
   { icon: '⚡', label: '能量联盟', to: '/features/energy-league' },
   { icon: '🧭', label: '玩法总览', to: '/home' }
@@ -56,6 +64,25 @@ const quicks = [
       </div>
       <div class="bar"><div class="bar-fill" :style="{ width: pct + '%' }"></div></div>
       <p class="goal-foot">还差 {{ left }} 次达标 · 当前 {{ pct }}%</p>
+    </section>
+
+    <!-- 我的计划 -->
+    <div class="section-head">
+      <h3>我的计划</h3>
+      <span class="more">本周</span>
+    </div>
+    <section class="card plan-card">
+      <div
+        v-for="p in plan"
+        :key="p.day"
+        class="plan-row"
+        :class="{ done: p.done }"
+        @click="p.done = !p.done"
+      >
+        <span class="plan-day">{{ p.day }}</span>
+        <span class="plan-name">{{ p.name }}</span>
+        <span class="plan-check">{{ p.done ? '✅' : '⬜' }}</span>
+      </div>
     </section>
 
     <!-- 名下数据 -->
@@ -193,6 +220,40 @@ const quicks = [
 .goal-foot {
   font-size: 12px;
   color: var(--color-text-light);
+}
+
+/* ===== 我的计划 ===== */
+.plan-card {
+  padding: 6px 14px;
+}
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--color-border);
+  cursor: pointer;
+}
+.plan-row:last-child {
+  border-bottom: none;
+}
+.plan-row.done .plan-name {
+  text-decoration: line-through;
+  color: var(--color-text-light);
+}
+.plan-day {
+  width: 40px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  flex-shrink: 0;
+}
+.plan-name {
+  flex: 1;
+  font-size: 14px;
+}
+.plan-check {
+  font-size: 16px;
 }
 
 /* ===== 数据 ===== */

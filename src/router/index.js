@@ -6,26 +6,20 @@ import { createRouter, createWebHistory } from 'vue-router'
  * - 新增路由请与李金燚统一确认后再注册
  */
 const routes = [
-  // 打开就是跑步：首页直接进运动页（课程页保留在 /courses，可从"我的"进入）
-  { path: '/', redirect: '/exercise' },
-  // —— 五 Tab 主结构（Keep 风格改版，李金燚负责） ——
+  // 默认进趣味玩法页
+  { path: '/', redirect: '/play' },
+  // —— 四个主 Tab ——
   {
-    path: '/courses',
-    name: 'courses',
-    component: () => import('@/views/courses/CoursesView.vue'),
-    meta: { title: '课程', tab: true }
+    path: '/play',
+    name: 'play',
+    component: () => import('@/views/play/PlayView.vue'),
+    meta: { title: '趣味玩法', tab: true }
   },
   {
-    path: '/schedule',
-    name: 'schedule',
-    component: () => import('@/views/schedule/ScheduleView.vue'),
-    meta: { title: '日程', tab: true }
-  },
-  {
-    path: '/exercise',
-    name: 'exercise',
+    path: '/run',
+    name: 'run',
     component: () => import('@/views/exercise/ExerciseView.vue'),
-    meta: { title: '运动', tab: true }
+    meta: { title: '跑步', tab: true }
   },
   {
     path: '/discover',
@@ -39,33 +33,21 @@ const routes = [
     component: () => import('@/views/profile/ProfileView.vue'),
     meta: { title: '我的', tab: true }
   },
-  // 旧首页保留（李浩阳），可从各详情页返回
+  // 旧首页（李浩阳），可从详情页返回
   {
     path: '/home',
     name: 'home',
     component: () => import('@/views/home/HomeView.vue'),
     meta: { title: '校园运动平台' }
   },
-  // —— 校园猫鼠大作战（李金燚负责） ——
-  {
-    path: '/game',
-    name: 'game-lobby',
-    component: () => import('@/views/game/GameLobbyView.vue'),
-    meta: { title: '猫鼠大作战 · 大厅' }
-  },
+  // —— 校园猫鼠大作战 v2（仅保留对战页，入口在趣味玩法） ——
   {
     path: '/game/play',
     name: 'game-play',
     component: () => import('@/views/game/GameMapView.vue'),
     meta: { title: '猫鼠大作战 · 对战' }
   },
-  {
-    path: '/game/result',
-    name: 'game-result',
-    component: () => import('@/views/game/GameResultView.vue'),
-    meta: { title: '猫鼠大作战 · 结算' }
-  },
-  // —— 四个轻量功能展示页（李浩阳负责） ——
+  // —— 四个轻量功能展示页 ——
   {
     path: '/features/sports-wall',
     name: 'sports-wall',
@@ -90,7 +72,7 @@ const routes = [
     component: () => import('@/views/features/AIPacerView.vue'),
     meta: { title: 'AI角色智能陪跑' }
   },
-  // —— 真实跑步与防作弊核验（李浩阳负责，本次仅新增这一条） ——
+  // —— 真实跑步与防作弊核验 ——
   {
     path: '/verify',
     name: 'verify',
