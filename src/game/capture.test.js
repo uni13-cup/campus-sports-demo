@@ -13,20 +13,24 @@ function chasingState() {
   return state
 }
 
-test('human proximity creates a candidate without immediately converting the mouse', () => {
+test('human proximity automatically captures and converts the mouse', () => {
   const state = chasingState()
   state.players[1].position = { ...state.players[0].position }
   const next = updateCaptureFlow(state, 1 / 30)
-  assert.equal(next.captureCandidate.mouseId, 'mouse-1')
-  assert.equal(next.players[1].role, 'mouse')
-  assert.equal(next.events.at(-1).type, 'capture-candidate')
+  assert.equal(next.captureCandidate, null)
+  assert.equal(next.players[1].role, 'cat')
+  assert.equal(next.players[0].captures, 1)
+  assert.deepEqual(next.events.slice(-3).map((event) => event.type), [
+    'capture-candidate',
+    'capture-confirmed',
+    'role-converted'
+  ])
 })
 
 test('simulated touch confirmation converts a candidate and records events', () => {
   const state = chasingState()
   state.players[1].position = { ...state.players[0].position }
-  const candidateState = updateCaptureFlow(state, 1 / 30)
-  const next = confirmCapture(candidateState, 'mouse-1')
+  const next = confirmCapture(state, 'mouse-1', 'cat-1')
   assert.equal(next.players[1].role, 'cat')
   assert.equal(next.players[0].captures, 1)
   assert.deepEqual(next.events.slice(-2).map((event) => event.type), [

@@ -1,7 +1,6 @@
 import { calcDistance, syncLegacyFields } from './engine.js'
 
 const EVENT_LIMIT = 40
-const CONFIRM_GRACE_SECONDS = 1.2
 
 export function detectCaptureCandidates(gameState) {
   if (gameState.phase !== 'chasing') return []
@@ -19,44 +18,23 @@ export function detectCaptureCandidates(gameState) {
   return candidates.sort((left, right) => left.distance - right.distance)
 }
 
-export function updateCaptureFlow(gameState, deltaSeconds = 0) {
+export function updateCaptureFlow(gameState, _deltaSeconds = 0) {
   let nextState = clone(gameState)
   if (nextState.phase !== 'chasing') {
     nextState.captureCandidate = null
     return nextState
   }
 
-  const aiCandidates = detectCaptureCandidates(nextState)
-    .filter((candidate) =>
-      nextState.players.find((player) => player.id === candidate.catId)?.controller === 'ai'
-    )
+  const candidates = detectCaptureCandidates(nextState)
   const capturedMouseIds = new Set()
-  for (const candidate of aiCandidates) {
+  for (const candidate of candidates) {
     if (capturedMouseIds.has(candidate.mouseId)) continue
+    appendEvent(nextState, 'capture-candidate', candidate)
     nextState = confirmCapture(nextState, candidate.mouseId, candidate.catId)
     capturedMouseIds.add(candidate.mouseId)
     if (nextState.phase === 'ended') return nextState
   }
-
-  const humanCandidate = detectCaptureCandidates(nextState).find((candidate) =>
-    nextState.players.find((player) => player.id === candidate.catId)?.controller === 'human'
-  )
-  const previous = nextState.captureCandidate
-  if (humanCandidate) {
-    nextState.captureCandidate = {
-      ...humanCandidate,
-      expiresIn: CONFIRM_GRACE_SECONDS
-    }
-    if (!previous || previous.mouseId !== humanCandidate.mouseId) {
-      appendEvent(nextState, 'capture-candidate', humanCandidate)
-    }
-  } else if (previous) {
-    const expiresIn = previous.expiresIn - deltaSeconds
-    nextState.captureCandidate = expiresIn > 0
-      ? { ...previous, expiresIn }
-      : null
-    if (!nextState.captureCandidate) appendEvent(nextState, 'capture-candidate-cleared', previous)
-  }
+  nextState.captureCandidate = null
   return syncLegacyFields(nextState)
 }
 

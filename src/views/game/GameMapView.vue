@@ -11,7 +11,7 @@ import {
   FIXED_STEP_SECONDS
 } from '@/game/simulation.js'
 import { updateNavigatingAi } from '@/game/navigation.js'
-import { confirmCapture, updateCaptureFlow } from '@/game/capture.js'
+import { updateCaptureFlow } from '@/game/capture.js'
 import { saveGameResult } from '@/game/result-store.js'
 import CampusMap from './components/CampusMap.vue'
 
@@ -64,10 +64,6 @@ const recentEvents = computed(() => (state.value?.events ?? [])
   .filter((event) => ['capture-candidate', 'capture-confirmed', 'role-converted'].includes(event.type))
   .slice(-3)
   .reverse())
-const captureCandidate = computed(() => state.value?.captureCandidate ?? null)
-const candidateMouse = computed(() =>
-  players.value.find((player) => player.id === captureCandidate.value?.mouseId)
-)
 
 function eventText(event) {
   if (event.type === 'capture-candidate') return `${event.mouseId} 进入抓捕范围`
@@ -161,20 +157,6 @@ function holdDirection(x, y, event) {
   touchInput.value = { x, y }
 }
 
-function confirmCandidate() {
-  const candidate = captureCandidate.value
-  if (!candidate) return
-  unlockAudio()
-  const beforeRole = candidateMouse.value?.role
-  state.value = confirmCapture(state.value, candidate.mouseId, candidate.catId)
-  const converted = state.value.players.find((player) => player.id === candidate.mouseId)
-  if (beforeRole === 'mouse' && converted?.role === 'cat') {
-    showFeedback('抓捕成功，电脑鼠已加入猫阵营')
-    playFeedback('capture')
-  }
-  checkEnd()
-}
-
 function showFeedback(message) {
   feedback.value = message
   if (feedbackTimer) window.clearTimeout(feedbackTimer)
@@ -243,10 +225,11 @@ onBeforeUnmount(() => {
   audioContext?.close?.()
 })
 
-watch(captureCandidate, (candidate, previous) => {
-  if (candidate && candidate.mouseId !== previous?.mouseId) {
-    showFeedback('已进入抓捕范围，请确认模拟触碰')
-    playFeedback('candidate')
+watch(() => state.value?.eventSequence ?? 0, (current, previous = 0) => {
+  const newEvents = (state.value?.events ?? []).filter((event) => event.id > previous)
+  if (newEvents.some((event) => event.type === 'capture-confirmed')) {
+    showFeedback('抓捕成功，电脑鼠已加入猫阵营')
+    playFeedback('capture')
   }
 })
 
@@ -259,7 +242,7 @@ watch(phase, (current, previous) => {
 
 watch(threatLevel, (current, previous) => {
   if (current === 'danger' && previous !== 'danger') {
-    showFeedback('危险接近 · 准备确认模拟触碰')
+    showFeedback('危险接近 · 进入 15m 自动抓捕')
     playFeedback('danger')
   }
 })
@@ -286,7 +269,7 @@ watch(threatLevel, (current, previous) => {
           :players="players"
           :config="state.config"
           :phase="phase"
-          :capture-candidate="captureCandidate"
+          :capture-candidate="state.captureCandidate"
           @ready="startSimulation"
         />
 
@@ -339,10 +322,6 @@ watch(threatLevel, (current, previous) => {
         </section>
 
         <div v-if="feedback" class="game-feedback" role="status">{{ feedback }}</div>
-        <div v-if="captureCandidate && phase === 'chasing'" class="capture-prompt">
-          <span>🐭 {{ candidateMouse?.id }} · {{ Math.round(captureCandidate.distance) }}m</span>
-          <button @click="confirmCandidate">确认模拟触碰</button>
-        </div>
         <div v-if="phase === 'ended'" class="end-overlay">
           <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
           <span>正在生成赛事结算</span>
@@ -474,33 +453,6 @@ watch(threatLevel, (current, previous) => {
   font-size: 11px;
   font-weight: 750;
   box-shadow: 0 8px 22px rgba(15, 48, 35, 0.22);
-}
-.capture-prompt {
-  position: absolute;
-  z-index: 5;
-  left: 50%;
-  bottom: 28px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  transform: translateX(-50%);
-  border: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 13px;
-  background: rgba(255, 248, 222, 0.95);
-  color: #6f5100;
-  font-size: 10px;
-  box-shadow: 0 12px 32px rgba(47, 37, 12, 0.2);
-}
-.capture-prompt button {
-  padding: 8px 11px;
-  border: 0;
-  border-radius: 9px;
-  background: #ef503d;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  cursor: pointer;
 }
 .sound-toggle {
   margin-top: 10px;
@@ -669,13 +621,6 @@ watch(threatLevel, (current, previous) => {
   font-size: 13px;
 }
 .game-feedback { top: 18px; z-index: 6; background: rgba(13, 51, 38, 0.94); }
-.capture-prompt {
-  z-index: 6;
-  bottom: 22px;
-  padding: 9px 10px;
-  border-radius: 14px;
-  background: rgba(255, 244, 213, 0.96);
-}
 .end-overlay { z-index: 7; }
 
 @keyframes danger-glow {
@@ -703,9 +648,6 @@ watch(threatLevel, (current, previous) => {
   .event-feed, .simulation-note { display: none; }
   .movement-deck { left: 9px; bottom: 28px; padding: 7px; }
   .movement-deck .dpad button { width: 36px; height: 31px; }
-  .capture-prompt { bottom: 32px; width: calc(100% - 160px); justify-content: space-between; }
-  .capture-prompt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .capture-prompt button { flex: none; }
   .game-feedback { top: 46px; max-width: 75%; text-align: center; }
 }
 
