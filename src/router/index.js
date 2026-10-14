@@ -6,7 +6,8 @@ import { createRouter, createWebHistory } from 'vue-router'
  * - 新增路由请与李金燚统一确认后再注册
  */
 const routes = [
-  { path: '/', redirect: '/courses' },
+  // 打开就是跑步：首页直接进运动页（课程页保留在 /courses，可从"我的"进入）
+  { path: '/', redirect: '/exercise' },
   // —— 五 Tab 主结构（Keep 风格改版，李金燚负责） ——
   {
     path: '/courses',
@@ -88,6 +89,13 @@ const routes = [
     name: 'ai-pacer',
     component: () => import('@/views/features/AIPacerView.vue'),
     meta: { title: 'AI角色智能陪跑' }
+  },
+  // —— 真实跑步与防作弊核验（李浩阳负责，本次仅新增这一条） ——
+  {
+    path: '/verify',
+    name: 'verify',
+    component: () => import('@/views/verify/VerifyView.vue'),
+    meta: { title: '真实跑步 · 防作弊核验' }
   },
   // 404 兜底
   {

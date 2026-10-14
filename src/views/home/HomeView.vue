@@ -28,6 +28,15 @@ function go(path) {
       <p class="hero-sub">五种玩法，一条主线——让你愿意跑。</p>
     </header>
 
+    <section class="demo-entry" @click="go('/verify')">
+      <span class="demo-icon">🛡</span>
+      <div class="demo-body">
+        <span class="demo-name">真实跑步 · 防作弊核验</span>
+        <span class="demo-desc">手机握在手里跑几步，看它怎么判断你真在跑</span>
+      </div>
+      <span class="card-arrow">›</span>
+    </section>
+
     <section class="modules">
       <h2 class="section-title">五大创新模块</h2>
       <div class="grid">
@@ -89,6 +98,37 @@ function go(path) {
   font-size: 14px;
   color: var(--color-text-light);
   margin-top: 8px;
+}
+.demo-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, #0f2f2c, #16544d);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.demo-icon {
+  font-size: 22px;
+}
+.demo-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.demo-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+.demo-desc {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.75);
+}
+.demo-entry .card-arrow {
+  color: rgba(255, 255, 255, 0.8);
 }
 .section-title {
   font-size: 16px;

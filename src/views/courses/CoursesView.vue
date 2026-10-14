@@ -6,10 +6,10 @@ const tabs = ['课程', '计划', '体测', '跑团']
 const activeTab = ref('课程')
 
 const entries = [
-  { icon: '📋', label: '全部课程', bg: '#e3edff' },
+  { icon: '📋', label: '全部课程', bg: '#e2f6f2' },
   { icon: '▶️', label: '免费课', bg: '#d9f7f0' },
   { icon: '🎥', label: '直播课', bg: '#ffe8d9' },
-  { icon: '🏃', label: '跑姿库', bg: '#e3edff' },
+  { icon: '🏃', label: '跑姿库', bg: '#e2f6f2' },
   { icon: '📍', label: '找跑道', bg: '#e0f7e3' }
 ]
 
@@ -18,7 +18,7 @@ const activeChip = ref('精选')
 
 const courses = [
   {
-    level: 'K1', badge: '免费', bg: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
+    level: 'K1', badge: '免费', bg: 'linear-gradient(135deg,#17c9ae,#07786d)',
     title: '八百米达标 · 呼吸节奏入门',
     meta: 'K1 零基础 · 12 分钟 · 评分 9.1',
     desc: '体育教研组官方课 · 新手跑姿打底'
