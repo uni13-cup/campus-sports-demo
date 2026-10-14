@@ -65,6 +65,7 @@ await new Promise((resolve, reject) => {
 let nextId = 0
 const pending = new Map()
 const runtimeErrors = []
+const externalRequests = []
 socket.addEventListener('message', (event) => {
   const message = JSON.parse(event.data)
   if (message.id && pending.has(message.id)) {
@@ -75,6 +76,15 @@ socket.addEventListener('message', (event) => {
   }
   if (message.method === 'Runtime.exceptionThrown') {
     runtimeErrors.push(message.params.exceptionDetails.text)
+  }
+  if (message.method === 'Network.requestWillBeSent') {
+    const requestUrl = message.params.request.url
+    if (
+      /^https?:/i.test(requestUrl) &&
+      !requestUrl.startsWith('http://127.0.0.1:4173/')
+    ) {
+      externalRequests.push(requestUrl)
+    }
   }
 })
 
@@ -105,6 +115,7 @@ async function screenshot(filename) {
 try {
   await command('Page.enable')
   await command('Runtime.enable')
+  await command('Network.enable')
   await command('Emulation.setDeviceMetricsOverride', {
     width: 1440,
     height: 900,
@@ -203,7 +214,81 @@ try {
   }
   await screenshot('continuous-movement.png')
 
-  const report = { url, initial, interaction, localScene, movement, runtimeErrors }
+  await command('Network.emulateNetworkConditions', {
+    offline: true,
+    latency: 0,
+    downloadThroughput: 0,
+    uploadThroughput: 0,
+    connectionType: 'none'
+  })
+  await sleep(300)
+  const offline = await evaluate(`(() => ({
+    canvas: Boolean(document.querySelector('.maplibregl-canvas')),
+    markers: document.querySelectorAll('.campus-role-marker').length,
+    attribution: document.querySelector('.maplibregl-ctrl-attrib')?.innerText
+  }))()`)
+
+  await command('Emulation.setDeviceMetricsOverride', {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    mobile: true
+  })
+  await sleep(500)
+  const mobile = await evaluate(`(() => ({
+    viewport: { width: innerWidth, height: innerHeight },
+    mapHeight: document.querySelector('.map-panel')?.getBoundingClientRect().height,
+    dpadVisible: Boolean(document.querySelector('.dpad')),
+    horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
+  }))()`)
+  await screenshot('mobile-map.png')
+
+  await command('Network.emulateNetworkConditions', {
+    offline: false,
+    latency: 0,
+    downloadThroughput: -1,
+    uploadThroughput: -1,
+    connectionType: 'wifi'
+  })
+  await evaluate(`sessionStorage.setItem('campus-catmouse-result-v2', JSON.stringify({
+    version: 2,
+    savedAt: Date.now(),
+    expiresAt: Date.now() + 3600000,
+    phase: 'ended',
+    winner: 'mouse',
+    endReason: 'timeout',
+    hidingTimeLeft: 0,
+    chasingTimeLeft: 0,
+    players: [
+      { id: 'cat-1', role: 'cat', controller: 'human', captures: 2 },
+      { id: 'mouse-1', role: 'cat', controller: 'ai', captures: 0 },
+      { id: 'mouse-2', role: 'cat', controller: 'ai', captures: 0 },
+      { id: 'mouse-3', role: 'mouse', controller: 'ai', captures: 0 }
+    ]
+  }))`)
+  await command('Page.navigate', { url: new URL('/game/result', url).href })
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (await evaluate(`Boolean(document.querySelector('.result-card'))`)) break
+    await sleep(100)
+  }
+  const resultRestore = await evaluate(`(() => ({
+    title: document.querySelector('.title')?.textContent.trim(),
+    stats: [...document.querySelectorAll('.stat-item')].map((node) => node.innerText.trim())
+  }))()`)
+  await screenshot('result-page.png')
+
+  const report = {
+    url,
+    initial,
+    interaction,
+    localScene,
+    movement,
+    offline,
+    mobile,
+    resultRestore,
+    externalRequests: [...new Set(externalRequests)],
+    runtimeErrors
+  }
   await writeFile(
     path.join(artifactsDir, 'verification.json'),
     `${JSON.stringify(report, null, 2)}\n`
@@ -214,6 +299,18 @@ try {
   }
   if (runtimeErrors.length > 0) {
     throw new Error(`Browser runtime errors: ${runtimeErrors.join('; ')}`)
+  }
+  if (!offline.canvas || offline.markers !== 6) {
+    throw new Error('Local campus scene did not survive offline mode')
+  }
+  if (mobile.mapHeight < 400 || !mobile.dpadVisible || mobile.horizontalOverflow) {
+    throw new Error('Mobile layout verification failed')
+  }
+  if (!resultRestore.title?.includes('鼠逃脱成功')) {
+    throw new Error('Session result was not restored on the result page')
+  }
+  if (externalRequests.length > 0) {
+    throw new Error(`Unexpected runtime network requests: ${externalRequests.join('; ')}`)
   }
 } finally {
   socket.close()

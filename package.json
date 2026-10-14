@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:game": "node --test src/game/*.test.js",
+    "verify:game": "node scripts/verify-campus-map.mjs http://127.0.0.1:4173/game/play"
   },
   "dependencies": {
     "maplibre-gl": "^6.14.0",

@@ -1,5 +1,5 @@
 {
-  "url": "http://127.0.0.1:4174/game/play",
+  "url": "http://127.0.0.1:4173/game/play",
   "initial": {
     "title": "猫鼠大作战 · 对战 | 校园运动平台",
     "canvas": {
@@ -36,5 +36,40 @@
     "collisionActive": true,
     "phaseTime": "3"
   },
+  "movement": {
+    "before": {
+      "x": 34,
+      "y": 611.25
+    },
+    "after": {
+      "x": 142,
+      "y": 611.25
+    },
+    "screenDistance": 108
+  },
+  "offline": {
+    "canvas": true,
+    "markers": 6,
+    "attribution": "OpenStreetMap campus data · ODbL 1.0"
+  },
+  "mobile": {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "mapHeight": 523.265625,
+    "dpadVisible": true,
+    "horizontalOverflow": false
+  },
+  "resultRestore": {
+    "title": "鼠逃脱成功！",
+    "stats": [
+      "最终猫阵营\n3 只",
+      "存活老鼠\n1 只",
+      "玩家抓捕\n2 只",
+      "追捕剩余\n0 秒"
+    ]
+  },
+  "externalRequests": [],
   "runtimeErrors": []
 }
