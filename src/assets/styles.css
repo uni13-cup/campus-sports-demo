@@ -1,15 +1,19 @@
-﻿/* ===== 全局样式 / 主题变量 ===== */
+/* ===== 全局样式 / 主题变量（趣跑校园 · 青绿主题） ===== */
 :root {
-  --color-primary: #21557b;
-  --color-primary-light: #edf5fa;
-  --color-accent: #1a537f;
-  --color-text: #2c3e50;
-  --color-text-light: #627484;
-  --color-border: #e0e7ee;
-  --color-bg: #f4f8fb;
+  --color-primary: #0ea394;
+  --color-primary-dark: #07786d;
+  --color-primary-light: #e2f6f2;
+  --color-accent: #f97316;
+  --color-success: #16a34a;
+  --color-danger: #ef4444;
+  --color-dark: #0f2f2c;
+  --color-text: #16302d;
+  --color-text-light: #7c8f8c;
+  --color-border: #e4eeeb;
+  --color-bg: #f1f6f5;
   --color-white: #ffffff;
-  --radius: 12px;
-  --shadow: 0 2px 12px rgba(33, 85, 123, 0.08);
+  --radius: 14px;
+  --shadow: 0 1px 2px rgba(15, 47, 44, 0.04);
 }
 
 * {
@@ -24,9 +28,16 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
   color: var(--color-text);
-  background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* 顶部一层淡青绿光晕，和参考版的纯灰底拉开区别 */
+body {
+  background-color: var(--color-bg);
+  background-image: radial-gradient(120% 260px at 50% 0%, #ddf1ec 0%, rgba(241, 246, 245, 0) 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 300px;
 }
 
 #app {
@@ -45,15 +56,98 @@ button {
 
 /* 通用容器 */
 .page {
-  max-width: 720px;
+  max-width: 520px;
   margin: 0 auto;
-  padding: 24px 20px 48px;
+  padding: 16px 16px 36px;
   width: 100%;
+}
+
+/* 通用卡片：白底 + 细描边，弱阴影 */
+.card {
+  background: var(--color-white);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+/* 区块标题行 */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 22px 2px 12px;
+}
+.section-head h3 {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+.section-head .more {
+  font-size: 13px;
+  color: var(--color-text-light);
+}
+
+/* 筛选 chips */
+.chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.chips::-webkit-scrollbar {
+  display: none;
+}
+.chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-white);
+  color: var(--color-text-light);
+  font-size: 13px;
+}
+.chip.active {
+  background: var(--color-dark);
+  color: #fff;
+  border-color: var(--color-dark);
+  font-weight: 600;
+}
+
+/* 顶部标签页（下划线式） */
+.tabs {
+  display: flex;
+  gap: 22px;
+  align-items: baseline;
+}
+.tab-item {
+  font-size: 15px;
+  color: var(--color-text-light);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  position: relative;
+}
+.tab-item.active {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--color-primary);
 }
 
 /* 响应式：手机优先 */
 @media (min-width: 768px) {
   .page {
-    padding: 32px 24px 64px;
+    padding: 24px 24px 44px;
   }
 }

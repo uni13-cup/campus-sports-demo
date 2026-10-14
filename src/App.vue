@@ -1,9 +1,12 @@
-﻿<script setup>
-// 根组件：仅承载路由出口，具体内容由各页面组件实现
+<script setup>
+import AppNav from '@/components/AppNav.vue'
+
+// 根组件：顶部导航 + 路由出口
 </script>
 
 <template>
   <div id="layout">
+    <AppNav />
     <router-view />
   </div>
 </template>
