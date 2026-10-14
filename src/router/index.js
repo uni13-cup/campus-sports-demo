@@ -6,63 +6,11 @@ import { createRouter, createWebHistory } from 'vue-router'
  * - 新增路由请与李金燚统一确认后再注册
  */
 const routes = [
-  { path: '/', redirect: '/courses' },
-  // —— 五 Tab 主结构（Keep 风格改版，李金燚负责） ——
   {
-    path: '/courses',
-    name: 'courses',
-    component: () => import('@/views/courses/CoursesView.vue'),
-    meta: { title: '课程', tab: true }
-  },
-  {
-    path: '/schedule',
-    name: 'schedule',
-    component: () => import('@/views/schedule/ScheduleView.vue'),
-    meta: { title: '日程', tab: true }
-  },
-  {
-    path: '/exercise',
-    name: 'exercise',
-    component: () => import('@/views/exercise/ExerciseView.vue'),
-    meta: { title: '运动', tab: true }
-  },
-  {
-    path: '/discover',
-    name: 'discover',
-    component: () => import('@/views/discover/DiscoverView.vue'),
-    meta: { title: '发现', tab: true }
-  },
-  {
-    path: '/profile',
-    name: 'profile',
-    component: () => import('@/views/profile/ProfileView.vue'),
-    meta: { title: '我的', tab: true }
-  },
-  // 旧首页保留（李浩阳），可从各详情页返回
-  {
-    path: '/home',
+    path: '/',
     name: 'home',
     component: () => import('@/views/home/HomeView.vue'),
     meta: { title: '校园运动平台' }
-  },
-  // —— 校园猫鼠大作战（李金燚负责） ——
-  {
-    path: '/game',
-    name: 'game-lobby',
-    component: () => import('@/views/game/GameLobbyView.vue'),
-    meta: { title: '猫鼠大作战 · 大厅' }
-  },
-  {
-    path: '/game/play',
-    name: 'game-play',
-    component: () => import('@/views/game/GameMapView.vue'),
-    meta: { title: '猫鼠大作战 · 对战' }
-  },
-  {
-    path: '/game/result',
-    name: 'game-result',
-    component: () => import('@/views/game/GameResultView.vue'),
-    meta: { title: '猫鼠大作战 · 结算' }
   },
   // —— 四个轻量功能展示页（李浩阳负责） ——
   {
