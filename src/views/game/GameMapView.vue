@@ -116,7 +116,7 @@ function checkEnd() {
   saveGameResult(state.value)
   showFeedback(state.value.winner === 'cat' ? '全部老鼠已抓获！' : '追捕时间结束')
   playFeedback('end')
-  window.setTimeout(() => router.push('/game/result'), 900)
+  window.setTimeout(() => router.push('/play'), 900)
 }
 
 function startMatch() {
