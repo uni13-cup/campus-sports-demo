@@ -1,60 +1,16 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 /**
- * 路由表
- * - 负责人标注见各组件目录说明
- * - 新增路由请与李金燚统一确认后再注册
+ * 路由表（当前为空）
+ * - 新增页面请先与李金燚确认路径约定后再注册路由
  */
-const routes = [
-  {
-    path: '/',
-    name: 'home',
-    component: () => import('@/views/home/HomeView.vue'),
-    meta: { title: '校园运动平台' }
-  },
-  // —— 四个轻量功能展示页（李浩阳负责） ——
-  {
-    path: '/features/sports-wall',
-    name: 'sports-wall',
-    component: () => import('@/views/features/SportsWallView.vue'),
-    meta: { title: '运动搭子墙' }
-  },
-  {
-    path: '/features/energy-league',
-    name: 'energy-league',
-    component: () => import('@/views/features/EnergyLeagueView.vue'),
-    meta: { title: '能量消费联盟' }
-  },
-  {
-    path: '/features/theme-run',
-    name: 'theme-run',
-    component: () => import('@/views/features/ThemeRunView.vue'),
-    meta: { title: '校园地标主题探索跑' }
-  },
-  {
-    path: '/features/ai-pacer',
-    name: 'ai-pacer',
-    component: () => import('@/views/features/AIPacerView.vue'),
-    meta: { title: 'AI角色智能陪跑' }
-  },
-  // 404 兜底
-  {
-    path: '/:pathMatch(.*)*',
-    redirect: '/'
-  }
-]
+const routes = []
 
 const router = createRouter({
   history: createWebHistory(),
   routes,
   scrollBehavior() {
     return { top: 0 }
-  }
-})
-
-router.afterEach((to) => {
-  if (to.meta?.title) {
-    document.title = `${to.meta.title} | 校园运动平台`
   }
 })
 
