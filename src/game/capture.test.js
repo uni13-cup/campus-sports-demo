@@ -15,7 +15,10 @@ function chasingState() {
 
 test('human proximity automatically captures and converts the mouse', () => {
   const state = chasingState()
-  state.players[1].position = { ...state.players[0].position }
+  state.players[1].position = {
+    x: state.players[0].position.x + state.config.catchThreshold,
+    y: state.players[0].position.y
+  }
   const next = updateCaptureFlow(state, 1 / 30)
   assert.equal(next.captureCandidate, null)
   assert.equal(next.players[1].role, 'cat')
@@ -25,6 +28,17 @@ test('human proximity automatically captures and converts the mouse', () => {
     'capture-confirmed',
     'role-converted'
   ])
+})
+
+test('human proximity outside the configured threshold does not capture', () => {
+  const state = chasingState()
+  state.players[1].position = {
+    x: state.players[0].position.x + state.config.catchThreshold + 0.01,
+    y: state.players[0].position.y
+  }
+  const next = updateCaptureFlow(state, 1 / 30)
+  assert.equal(next.players[1].role, 'mouse')
+  assert.equal(next.players[0].captures, 0)
 })
 
 test('simulated touch confirmation converts a candidate and records events', () => {

@@ -152,21 +152,23 @@ test('moveCharacter rejects movement into a building', () => {
 })
 
 test('checkCaptures converts a mouse exactly at the catch threshold', () => {
-  const initial = createCaptureState(15)
+  const initial = createCaptureState()
+  initial.players[1].position.x = initial.players[0].position.x + initial.config.catchThreshold
   const result = checkCaptures(initial)
   const convertedMouse = result.state.players.find(
     (player) => player.id === 'mouse-1'
   )
 
   assert.equal(result.captures.length, 1)
-  assert.equal(result.captures[0].distance, 15)
+  assert.equal(result.captures[0].distance, initial.config.catchThreshold)
   assert.equal(convertedMouse.role, 'cat')
   assert.equal(convertedMouse.controller, 'ai')
   assert.equal(convertedMouse.capturedAt, 30)
 })
 
 test('checkCaptures does not capture a mouse outside the threshold', () => {
-  const initial = createCaptureState(15.01)
+  const initial = createCaptureState()
+  initial.players[1].position.x = initial.players[0].position.x + initial.config.catchThreshold + 0.01
   const result = checkCaptures(initial)
 
   assert.equal(result.captures.length, 0)
@@ -395,7 +397,7 @@ function distanceToRectangle(position, rectangle) {
   return Math.hypot(dx, dy)
 }
 
-function createCaptureState(distance) {
+function createCaptureState(distance = 0) {
   const state = initGame()
   state.phase = 'chasing'
   state.players = state.players.slice(0, 2)

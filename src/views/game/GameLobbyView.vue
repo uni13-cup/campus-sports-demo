@@ -25,7 +25,7 @@ function backHome() {
       <ul>
         <li>你控制1只猫，追捕{{ GAME_CONFIG.mouseCount }}只电脑鼠。</li>
         <li>开局先躲藏{{ GAME_CONFIG.hidingDuration }}秒，此时猫不能移动。</li>
-        <li>追捕限时{{ GAME_CONFIG.chasingDuration }}秒，距离 ≤ {{ GAME_CONFIG.catchThreshold }}模拟米时提示“模拟触碰确认”。</li>
+        <li>追捕限时{{ GAME_CONFIG.chasingDuration }}秒，距离 ≤ {{ GAME_CONFIG.catchThreshold }}模拟米时自动抓捕并转换阵营。</li>
         <li>被抓的鼠会变成电脑猫；全部抓完猫胜，超时鼠胜。</li>
         <li>灰色障碍区域不可进入，其余区域可以移动。</li>
       </ul>

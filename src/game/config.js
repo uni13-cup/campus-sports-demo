@@ -92,7 +92,7 @@ export const GAME_CONFIG = {
   duration: 30,
 
   // 抓捕阈值：猫鼠距离 <= 该值视为被抓（米）
-  catchThreshold: 15,
+  catchThreshold: 30,
 
   // 移动步长（米 / 帧）
   moveStep: 10,

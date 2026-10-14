@@ -242,7 +242,7 @@ watch(phase, (current, previous) => {
 
 watch(threatLevel, (current, previous) => {
   if (current === 'danger' && previous !== 'danger') {
-    showFeedback('危险接近 · 进入 15m 自动抓捕')
+    showFeedback(`危险接近 · 进入 ${state.value?.config.catchThreshold ?? 30}m 自动抓捕`)
     playFeedback('danger')
   }
 })
