@@ -111,6 +111,7 @@ export function advanceSimulation(
   if (gameState.phase === 'ended' || deltaSeconds === 0) return clone(gameState)
 
   let nextState = gameState
+  const captureUpdater = options.captureUpdater ?? ((current) => checkCaptures(current).state)
   const human = nextState.players.find((player) => player.controller === 'human')
   if (human) {
     nextState = moveCharacterContinuous(
@@ -120,13 +121,14 @@ export function advanceSimulation(
       deltaSeconds
     )
   }
+  // 玩家猫移动后立即判定，避免已碰到的老鼠先执行逃跑再被检查。
+  if (nextState.phase === 'chasing') {
+    nextState = captureUpdater(nextState, deltaSeconds)
+    if (nextState.phase === 'ended') return syncLegacyFields(nextState)
+  }
   const aiUpdater = options.aiUpdater ?? updateAiContinuous
   nextState = aiUpdater(nextState, deltaSeconds)
   nextState = tickGame(nextState, deltaSeconds)
-  if (nextState.phase === 'chasing') {
-    const captureUpdater = options.captureUpdater ?? ((current) => checkCaptures(current).state)
-    nextState = captureUpdater(nextState, deltaSeconds)
-  }
   return syncLegacyFields(nextState)
 }
 

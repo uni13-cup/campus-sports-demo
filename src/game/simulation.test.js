@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { initGame } from './engine.js'
+import { updateCaptureFlow } from './capture.js'
 import {
   advanceSimulation,
   clampFrameDelta,
@@ -64,4 +65,26 @@ test('fixed simulation advances the countdown with fractional seconds', () => {
   const next = advanceSimulation(state, { x: 0, y: 0 }, 1 / 30)
   assert.ok(next.hidingTimeLeft < 5)
   assert.ok(next.hidingTimeLeft > 4.96)
+})
+
+test('player contact captures a mouse before that mouse can flee', () => {
+  const state = initGame({ obstacles: [] })
+  state.phase = 'chasing'
+  state.players[1].position = {
+    x: state.players[0].position.x + state.config.catchThreshold + 1,
+    y: state.players[0].position.y
+  }
+
+  const next = advanceSimulation(state, { x: 1, y: 0 }, 0.1, {
+    captureUpdater: updateCaptureFlow,
+    aiUpdater(current) {
+      const moved = JSON.parse(JSON.stringify(current))
+      moved.players[1].position.x += 200
+      return moved
+    }
+  })
+
+  assert.equal(next.players[1].role, 'cat')
+  assert.equal(next.players[1].controller, 'ai')
+  assert.equal(next.players[0].captures, 1)
 })

@@ -41,6 +41,44 @@ test('human proximity outside the configured threshold does not capture', () => 
   assert.equal(next.players[0].captures, 0)
 })
 
+test('one human contact converts only the nearest mouse', () => {
+  const state = chasingState()
+  state.players[1].position = {
+    x: state.players[0].position.x + 10,
+    y: state.players[0].position.y
+  }
+  state.players[2].position = {
+    x: state.players[0].position.x + 20,
+    y: state.players[0].position.y
+  }
+
+  const next = updateCaptureFlow(state, 1 / 30)
+  assert.equal(next.players[1].role, 'cat')
+  assert.equal(next.players[2].role, 'mouse')
+  assert.equal(next.players[0].captures, 1)
+})
+
+test('one contact episode does not chain-capture nearby mice', () => {
+  const state = chasingState()
+  state.players[1].position = { x: state.players[0].position.x + 10, y: state.players[0].position.y }
+  state.players[2].position = { x: state.players[0].position.x + 20, y: state.players[0].position.y }
+
+  const firstFrame = updateCaptureFlow(state, 1 / 30)
+  const secondFrame = updateCaptureFlow(firstFrame, 1 / 30)
+  assert.equal(firstFrame.players.filter((player) => player.role === 'cat').length, 2)
+  assert.equal(secondFrame.players.filter((player) => player.role === 'cat').length, 2)
+  assert.equal(secondFrame.players[2].role, 'mouse')
+
+  secondFrame.players[2].position.x += secondFrame.config.catchThreshold * 2
+  const outsideFrame = updateCaptureFlow(secondFrame, 1 / 30)
+  outsideFrame.players[2].position = {
+    x: outsideFrame.players[0].position.x + 20,
+    y: outsideFrame.players[0].position.y
+  }
+  const reenteredFrame = updateCaptureFlow(outsideFrame, 1 / 30)
+  assert.equal(reenteredFrame.players[2].role, 'cat')
+})
+
 test('simulated touch confirmation converts a candidate and records events', () => {
   const state = chasingState()
   state.players[1].position = { ...state.players[0].position }
@@ -60,13 +98,13 @@ test('confirmation outside the threshold does not capture', () => {
   assert.equal(next.players[1].role, 'mouse')
 })
 
-test('computer cats confirm captures automatically', () => {
+test('converted computer cats do not trigger automatic chain captures', () => {
   const state = chasingState()
   state.players[1].role = 'cat'
   state.players[1].controller = 'ai'
   state.players[2].position = { ...state.players[1].position }
   const next = updateCaptureFlow(state, 1 / 30)
-  assert.equal(next.players[2].role, 'cat')
+  assert.equal(next.players[2].role, 'mouse')
 })
 
 test('confirming the final mouse ends the game with a cat victory', () => {

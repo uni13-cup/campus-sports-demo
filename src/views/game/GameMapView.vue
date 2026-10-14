@@ -53,7 +53,9 @@ const nearestMouse = computed(() => {
     }))
     .sort((left, right) => left.distance - right.distance)[0]
 })
-const nearestMouseDistance = computed(() => Math.round(nearestMouse.value?.distance ?? 0))
+const nearestMouseDistance = computed(() =>
+  nearestMouse.value ? nearestMouse.value.distance.toFixed(1) : '0.0'
+)
 const threatLevel = computed(() => {
   if (phase.value !== 'chasing' || !nearestMouse.value) return 'standby'
   if (nearestMouse.value.distance <= state.value.config.catchThreshold * 2) return 'danger'
@@ -235,14 +237,14 @@ watch(() => state.value?.eventSequence ?? 0, (current, previous = 0) => {
 
 watch(phase, (current, previous) => {
   if (current === 'chasing' && previous === 'hiding') {
-    showFeedback('追捕开始 · 已锁定最近目标')
+    showFeedback('追捕开始 · 自由选择附近老鼠')
     playFeedback('chase')
   }
 })
 
 watch(threatLevel, (current, previous) => {
   if (current === 'danger' && previous !== 'danger') {
-    showFeedback(`危险接近 · 进入 ${state.value?.config.catchThreshold ?? 30}m 自动抓捕`)
+    showFeedback(`老鼠接近 · 进入 ${state.value?.config.catchThreshold ?? 80}m 自动抓捕`)
     playFeedback('danger')
   }
 })
@@ -280,7 +282,7 @@ watch(threatLevel, (current, previous) => {
           <div class="status-grid">
             <div><span>存活鼠</span><strong>{{ mice.length }}</strong></div>
             <div><span>猫阵营</span><strong>{{ cats.length }}</strong></div>
-            <div><span>最近目标</span><strong>{{ nearestMouseDistance }}<small>m</small></strong></div>
+            <div><span>最近老鼠</span><strong>{{ nearestMouseDistance }}<small>m</small></strong></div>
             <div><span>你的抓捕</span><strong>{{ humanCat?.captures ?? 0 }}</strong></div>
           </div>
 
@@ -289,10 +291,10 @@ watch(threatLevel, (current, previous) => {
               <span class="card-kicker">追踪态势</span>
               <strong v-if="phase === 'hiding'">等待追捕开始</strong>
               <strong v-else-if="nearestMouse">
-                {{ threatLevel === 'danger' ? '即将进入抓捕距离' : threatLevel === 'near' ? '目标正在接近' : '锁定最近电脑鼠' }}
+                {{ threatLevel === 'danger' ? '已有老鼠进入抓捕距离' : threatLevel === 'near' ? '附近发现电脑鼠' : '自由追逐任意老鼠' }}
               </strong>
               <strong v-else>全部目标已清除</strong>
-              <p>红色虚线连接当前最近目标，短尾迹仅保留约 4 秒。</p>
+              <p>靠近任意老鼠至 {{ state.config.catchThreshold }}m 内，只转换距离最近的一只。</p>
             </div>
 
             <div v-if="recentEvents.length" class="event-feed" aria-label="赛事事件">

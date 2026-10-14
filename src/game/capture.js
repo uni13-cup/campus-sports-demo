@@ -1,4 +1,4 @@
-import { calcDistance, syncLegacyFields } from './engine.js'
+import { calcDistance, checkCaptures, syncLegacyFields } from './engine.js'
 
 const EVENT_LIMIT = 40
 
@@ -19,23 +19,27 @@ export function detectCaptureCandidates(gameState) {
 }
 
 export function updateCaptureFlow(gameState, _deltaSeconds = 0) {
-  let nextState = clone(gameState)
+  const nextState = clone(gameState)
   if (nextState.phase !== 'chasing') {
     nextState.captureCandidate = null
     return nextState
   }
 
-  const candidates = detectCaptureCandidates(nextState)
-  const capturedMouseIds = new Set()
-  for (const candidate of candidates) {
-    if (capturedMouseIds.has(candidate.mouseId)) continue
-    appendEvent(nextState, 'capture-candidate', candidate)
-    nextState = confirmCapture(nextState, candidate.mouseId, candidate.catId)
-    capturedMouseIds.add(candidate.mouseId)
-    if (nextState.phase === 'ended') return nextState
+  const result = checkCaptures(nextState)
+  const capturedState = result.state
+  for (const capture of result.captures) {
+    appendEvent(capturedState, 'capture-candidate', capture)
+    appendEvent(capturedState, 'capture-confirmed', capture)
+    appendEvent(capturedState, 'role-converted', {
+      playerId: capture.mouseId,
+      role: 'cat'
+    })
   }
-  nextState.captureCandidate = null
-  return syncLegacyFields(nextState)
+  if (capturedState.phase === 'ended' && result.captures.length > 0) {
+    appendEvent(capturedState, 'game-ended', { winner: 'cat' })
+  }
+  capturedState.captureCandidate = null
+  return syncLegacyFields(capturedState)
 }
 
 export function confirmCapture(gameState, mouseId, catId = null) {

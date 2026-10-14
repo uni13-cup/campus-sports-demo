@@ -85,8 +85,7 @@ function createStyle() {
       campus: { type: 'geojson', data: CAMPUS_SCENE },
       activity: { type: 'geojson', data: activityPolygon() },
       collisions: { type: 'geojson', data: collisionFeatures() },
-      trails: { type: 'geojson', data: emptyFeatureCollection() },
-      pursuit: { type: 'geojson', data: emptyFeatureCollection() }
+      trails: { type: 'geojson', data: emptyFeatureCollection() }
     },
     layers: [
       { id: 'offline-base', type: 'background', paint: { 'background-color': '#cbdacb' } },
@@ -173,14 +172,6 @@ function createStyle() {
         }
       },
       {
-        id: 'pursuit-glow', type: 'line', source: 'pursuit',
-        paint: { 'line-color': '#ff5a47', 'line-width': 8, 'line-opacity': 0.12, 'line-blur': 3 }
-      },
-      {
-        id: 'pursuit-line', type: 'line', source: 'pursuit',
-        paint: { 'line-color': '#ff5a47', 'line-width': 2, 'line-opacity': 0.78, 'line-dasharray': [1.4, 1.4] }
-      },
-      {
         id: 'activity-border', type: 'line', source: 'activity',
         paint: { 'line-color': '#12b878', 'line-width': 3, 'line-dasharray': [2, 1] }
       },
@@ -207,33 +198,14 @@ function markerElement(player) {
   return element
 }
 
-function nearestMouseToHuman() {
-  const human = props.players.find((player) => player.controller === 'human')
-  if (!human) return null
-  return props.players
-    .filter((player) => player.role === 'mouse')
-    .map((player) => ({
-      player,
-      distance: Math.hypot(
-        player.position.x - human.position.x,
-        player.position.y - human.position.y
-      )
-    }))
-    .sort((left, right) => left.distance - right.distance)[0] ?? null
-}
-
-function applyMarkerAppearance(element, player, nearest = nearestMouseToHuman()) {
+function applyMarkerAppearance(element, player) {
   const converted = player.role === 'cat' && player.controller === 'ai'
-  const isTarget = nearest?.player.id === player.id && props.phase === 'chasing'
   const isCandidate = props.captureCandidate?.mouseId === player.id
-  const isDanger = player.role === 'mouse' && isTarget && nearest.distance <= 65
   element.className = [
     'campus-role-marker',
     `is-${player.role}`,
     player.controller === 'human' ? 'is-human' : 'is-ai',
     converted ? 'is-converted' : '',
-    isTarget ? 'is-target' : '',
-    isDanger ? 'is-danger' : '',
     isCandidate ? 'is-candidate' : ''
   ].filter(Boolean).join(' ')
   element.querySelector('.marker-face').textContent = player.role === 'cat' ? '🐱' : '🐭'
@@ -244,9 +216,7 @@ function applyMarkerAppearance(element, player, nearest = nearestMouseToHuman())
         ? '可抓捕'
         : converted
           ? '新猫'
-          : isTarget
-            ? '目标'
-            : ''
+          : ''
   element.setAttribute(
     'aria-label',
     player.controller === 'human' ? '玩家猫' : player.role === 'cat' ? '电脑猫' : '电脑鼠'
@@ -268,7 +238,7 @@ function recordTrail(player, now) {
   )
 }
 
-function updateMapOverlays(nearest) {
+function updateMapOverlays() {
   if (!map) return
   const now = performance.now()
   for (const player of props.players) recordTrail(player, now)
@@ -286,28 +256,11 @@ function updateMapOverlays(nearest) {
       }]
     })
   map.getSource('trails')?.setData({ type: 'FeatureCollection', features: trailFeatures })
-
-  const human = props.players.find((player) => player.controller === 'human')
-  const pursuitFeatures = props.phase === 'chasing' && human && nearest
-    ? [{
-        type: 'Feature',
-        properties: { distance: nearest.distance },
-        geometry: {
-          type: 'LineString',
-          coordinates: [
-            gameToLngLat(human.position, props.config),
-            gameToLngLat(nearest.player.position, props.config)
-          ]
-        }
-      }]
-    : []
-  map.getSource('pursuit')?.setData({ type: 'FeatureCollection', features: pursuitFeatures })
 }
 
 function updateMarkers() {
   if (!mapReady.value || !map) return
   const activeIds = new Set(props.players.map((player) => player.id))
-  const nearest = nearestMouseToHuman()
 
   for (const [id, marker] of markers) {
     if (!activeIds.has(id)) {
@@ -336,12 +289,12 @@ function updateMarkers() {
       ) * 180 / Math.PI
       element.style.setProperty('--heading', `${heading}deg`)
     }
-    applyMarkerAppearance(element, player, nearest)
+    applyMarkerAppearance(element, player)
     marker.setLngLat(gameToLngLat(player.position, props.config))
     previousPositions.set(player.id, { ...player.position })
   }
 
-  updateMapOverlays(nearest)
+  updateMapOverlays()
   if (cameraMode.value === 'follow') centerOnHuman(false)
 }
 
@@ -386,7 +339,6 @@ function applyVisualMode() {
   map.setLayoutProperty('campus-buildings-3d', 'visibility', immersive ? 'visible' : 'none')
   map.setLayoutProperty('campus-buildings-flat', 'visibility', immersive ? 'none' : 'visible')
   map.setLayoutProperty('trails-layer', 'visibility', performanceMode.value ? 'none' : 'visible')
-  map.setLayoutProperty('pursuit-glow', 'visibility', performanceMode.value ? 'none' : 'visible')
   map.easeTo({ pitch: immersive ? 42 : 0, bearing: immersive ? -10 : 0, duration: 500, essential: true })
   updateMarkers()
 }
@@ -447,7 +399,8 @@ onMounted(() => {
 watch(
   () => [props.players, props.captureCandidate, props.phase],
   updateMarkers,
-  { deep: true, flush: 'post' }
+  // 抓捕发生时同步刷新角色，避免逻辑已变猫而地图仍多显示一帧老鼠。
+  { deep: true, flush: 'sync' }
 )
 
 onBeforeUnmount(() => {
@@ -537,9 +490,16 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   background: #ffd65f;
   box-shadow: 0 7px 18px rgba(11, 35, 27, 0.38);
-  transition: transform 0.13s linear, filter 0.2s ease;
+  /* MapLibre writes transform on this element every frame. Do not animate or
+     override it, otherwise the visible marker trails behind its game position. */
+  transition: filter 0.2s ease;
 }
-.campus-role-marker .marker-face { z-index: 1; font-size: 22px; line-height: 1; }
+.campus-role-marker .marker-face {
+  z-index: 1;
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.13s ease;
+}
 .campus-role-marker .marker-ring {
   position: absolute;
   inset: -7px;
@@ -586,10 +546,8 @@ onBeforeUnmount(() => {
 .campus-role-marker.is-human .marker-ring { border-color: rgba(255, 77, 56, 0.5); opacity: 1; animation: marker-pulse 1.6s ease-out infinite; }
 .campus-role-marker.is-converted { background: #ab8cf3; }
 .campus-role-marker.is-converted .marker-direction { color: #6848bb; }
-.campus-role-marker.is-target { filter: saturate(1.12) brightness(1.03); }
-.campus-role-marker.is-target .marker-ring { opacity: 1; animation: marker-pulse 1.15s ease-out infinite; }
-.campus-role-marker.is-danger .marker-label { background: #ee6d2f; }
-.campus-role-marker.is-candidate { background: #ff7c62; transform: scale(1.12); }
+.campus-role-marker.is-candidate { background: #ff7c62; }
+.campus-role-marker.is-candidate .marker-face { transform: scale(1.12); }
 .campus-role-marker.is-candidate .marker-ring { border-color: #ff5a47; opacity: 1; animation: candidate-pulse 0.72s ease-out infinite; }
 
 .map-status, .map-actions { position: absolute; z-index: 3; display: flex; gap: 7px; }
