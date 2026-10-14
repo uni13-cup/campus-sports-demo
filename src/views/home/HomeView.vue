@@ -103,7 +103,7 @@ function go(path) {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: linear-gradient(135deg, #1f2937, #3b4a63);
+  background: linear-gradient(135deg, #0f2f2c, #16544d);
   border-radius: var(--radius);
   padding: 16px;
   cursor: pointer;
