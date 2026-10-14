@@ -11,6 +11,10 @@ export function createResultSnapshot(gameState, now = Date.now()) {
     endReason: gameState.endReason,
     hidingTimeLeft: gameState.hidingTimeLeft,
     chasingTimeLeft: gameState.chasingTimeLeft,
+    events: (gameState.events ?? [])
+      .filter((event) => ['capture-confirmed', 'role-converted', 'game-ended'].includes(event.type))
+      .slice(-8)
+      .map((event) => ({ ...event })),
     players: gameState.players.map((player) => ({
       id: player.id,
       role: player.role,

@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const url = process.argv[2] ?? 'http://127.0.0.1:4173/game/play'
+const appOrigin = new URL(url).origin
 const chromePath = process.env.CHROME_PATH ??
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const artifactsDir = path.resolve('artifacts', 'campus-map')
@@ -81,7 +82,7 @@ socket.addEventListener('message', (event) => {
     const requestUrl = message.params.request.url
     if (
       /^https?:/i.test(requestUrl) &&
-      !requestUrl.startsWith('http://127.0.0.1:4173/')
+      !requestUrl.startsWith(`${appOrigin}/`)
     ) {
       externalRequests.push(requestUrl)
     }
@@ -139,16 +140,27 @@ try {
     controls: document.querySelectorAll('.maplibregl-ctrl button').length,
     attribution: document.querySelector('.maplibregl-ctrl-attrib')?.innerText,
     status: [...document.querySelectorAll('.map-status span')].map((node) => node.textContent.trim()),
-    mapDebug: window.__campusMap ? {
-      loaded: window.__campusMap.loaded(),
-      styleLoaded: window.__campusMap.isStyleLoaded(),
-      layers: window.__campusMap.getStyle().layers.map((layer) => layer.id),
-      campusFeatures: window.__campusMap.querySourceFeatures('campus').length,
-      activityFeatures: window.__campusMap.querySourceFeatures('activity').length,
-      center: window.__campusMap.getCenter().toArray(),
-      zoom: window.__campusMap.getZoom(),
-      pitch: window.__campusMap.getPitch()
-    } : null,
+    cameraModes: [...document.querySelectorAll('.map-actions .action-group:first-child button')]
+      .map((node) => node.textContent.trim()),
+    visualModes: [...document.querySelectorAll('.map-actions .secondary-actions button')]
+      .map((node) => node.textContent.trim()),
+    mapDebug: window.__campusMap ? (() => {
+      const debug = {
+        loaded: window.__campusMap.loaded(),
+        styleLoaded: window.__campusMap.isStyleLoaded(),
+        layers: window.__campusMap.getStyle()?.layers?.map((layer) => layer.id) ?? [],
+        center: window.__campusMap.getCenter().toArray(),
+        zoom: window.__campusMap.getZoom(),
+        pitch: window.__campusMap.getPitch()
+      }
+      try {
+        debug.campusFeatures = window.__campusMap.querySourceFeatures('campus').length
+        debug.activityFeatures = window.__campusMap.querySourceFeatures('activity').length
+      } catch (error) {
+        debug.sourceError = error.message
+      }
+      return debug
+    })() : null,
     mapErrors: window.__campusMapErrors ?? []
   }))()`)
   await screenshot('local-map.png')
@@ -157,9 +169,9 @@ try {
     const zoom = document.querySelector('.maplibregl-ctrl-zoom-in')
     zoom?.click()
     const fullView = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('查看全场'))
+      .find((button) => button.textContent.includes('全局'))
     const collision = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('碰撞范围'))
+      .find((button) => button.textContent.includes('调试'))
     fullView?.click()
     collision?.click()
     return {
@@ -175,7 +187,7 @@ try {
     canvasWidth: document.querySelector('.maplibregl-canvas')?.width,
     canvasHeight: document.querySelector('.maplibregl-canvas')?.height,
     collisionActive: [...document.querySelectorAll('.map-actions button')]
-      .some((button) => button.textContent.includes('碰撞范围') && button.classList.contains('active')),
+      .some((button) => button.textContent.includes('调试') && button.classList.contains('active')),
     phaseTime: document.querySelector('.phase-timer strong')?.textContent.trim()
   }))()`)
   await screenshot('collision-debug.png')
@@ -214,6 +226,15 @@ try {
   }
   await screenshot('continuous-movement.png')
 
+  await evaluate(`(() => {
+    const collision = [...document.querySelectorAll('.map-actions button')]
+      .find((button) => button.textContent.includes('调试'))
+    if (collision?.classList.contains('active')) collision.click()
+    const follow = [...document.querySelectorAll('.map-actions button')]
+      .find((button) => button.textContent.includes('跟随'))
+    follow?.click()
+  })()`)
+
   await command('Network.emulateNetworkConditions', {
     offline: true,
     latency: 0,
@@ -239,6 +260,8 @@ try {
     viewport: { width: innerWidth, height: innerHeight },
     mapHeight: document.querySelector('.map-panel')?.getBoundingClientRect().height,
     dpadVisible: Boolean(document.querySelector('.dpad')),
+    hudHeight: document.querySelector('.match-hud')?.getBoundingClientRect().height,
+    hudDetailsVisible: document.querySelector('.hud-details')?.getBoundingClientRect().height > 0,
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
   }))()`)
   await screenshot('mobile-map.png')
@@ -311,6 +334,12 @@ try {
   }
   if (externalRequests.length > 0) {
     throw new Error(`Unexpected runtime network requests: ${externalRequests.join('; ')}`)
+  }
+  if (initial.markers !== 6 || initial.mapErrors.length > 0) {
+    throw new Error(`Map initialization failed: ${initial.mapErrors.join('; ')}`)
+  }
+  if (!initial.cameraModes.includes('跟随') || !initial.cameraModes.includes('自由') || !initial.cameraModes.includes('全局')) {
+    throw new Error('Camera mode controls are incomplete')
   }
 } finally {
   socket.close()

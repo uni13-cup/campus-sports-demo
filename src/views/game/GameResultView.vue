@@ -15,6 +15,10 @@ const catCount = computed(() =>
 const playerCaptures = computed(() =>
   result.value?.players?.find((player) => player.controller === 'human')?.captures ?? 0
 )
+const eventSummaries = computed(() => (result.value?.events ?? [])
+  .filter((event) => event.type === 'capture-confirmed')
+  .map((event) => `${event.catId} 抓获 ${event.mouseId}`)
+  .slice(-4))
 
 onMounted(() => {
   result.value = loadGameResult() ?? getState()
@@ -59,6 +63,14 @@ function backHome() {
           <strong>{{ result.chasingTimeLeft }} 秒</strong>
         </div>
       </div>
+
+      <div class="event-summary">
+        <span>赛事摘要</span>
+        <p v-if="eventSummaries.length === 0">本局没有已保存的抓捕事件</p>
+        <p v-for="(event, index) in eventSummaries" :key="`${index}-${event}`">{{ event }}</p>
+      </div>
+
+      <p class="simulation-disclaimer">本结果来自二维模拟定位与加速演示，不代表真实 GPS 轨迹。</p>
     </div>
 
     <div class="actions">
@@ -112,6 +124,25 @@ function backHome() {
   font-size: 22px;
   color: var(--color-primary);
 }
+.event-summary {
+  width: min(480px, 100%);
+  margin: 26px auto 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(46, 107, 255, 0.12);
+  border-radius: 14px;
+  background: #f6f9ff;
+  text-align: left;
+}
+.event-summary > span {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.event-summary p { margin: 4px 0; color: var(--color-text-light); font-size: 12px; }
+.simulation-disclaimer { margin: 16px 0 0; color: var(--color-text-light); font-size: 11px; }
 .actions {
   display: flex;
   flex-direction: column;

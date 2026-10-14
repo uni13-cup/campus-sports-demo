@@ -25,6 +25,7 @@ test('result snapshot omits positions and keeps the scoreboard', () => {
   assert.equal(snapshot.players.length, 6)
   assert.equal('position' in snapshot.players[0], false)
   assert.equal(snapshot.savedAt, 1000)
+  assert.deepEqual(snapshot.events, [])
 })
 
 test('session result can be saved and loaded', () => {
