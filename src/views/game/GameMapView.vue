@@ -10,6 +10,7 @@ import {
   clampFrameDelta,
   FIXED_STEP_SECONDS
 } from '@/game/simulation.js'
+import { updateNavigatingAi } from '@/game/navigation.js'
 import CampusMap from './components/CampusMap.vue'
 
 const router = useRouter()
@@ -72,7 +73,8 @@ function runFrame(timestamp) {
     state.value = advanceSimulation(
       state.value,
       currentInput(),
-      FIXED_STEP_SECONDS
+      FIXED_STEP_SECONDS,
+      { aiUpdater: updateNavigatingAi }
     )
     accumulatedTime -= FIXED_STEP_SECONDS
     checkEnd()

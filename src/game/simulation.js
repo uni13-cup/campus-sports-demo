@@ -99,7 +99,12 @@ export function updateAiContinuous(gameState, deltaSeconds) {
   return syncLegacyFields(nextState)
 }
 
-export function advanceSimulation(gameState, humanInput, deltaSeconds) {
+export function advanceSimulation(
+  gameState,
+  humanInput,
+  deltaSeconds,
+  options = {}
+) {
   if (!Number.isFinite(deltaSeconds) || deltaSeconds < 0) {
     throw new TypeError('deltaSeconds must be a non-negative finite number')
   }
@@ -115,7 +120,8 @@ export function advanceSimulation(gameState, humanInput, deltaSeconds) {
       deltaSeconds
     )
   }
-  nextState = updateAiContinuous(nextState, deltaSeconds)
+  const aiUpdater = options.aiUpdater ?? updateAiContinuous
+  nextState = aiUpdater(nextState, deltaSeconds)
   nextState = tickGame(nextState, deltaSeconds)
   if (nextState.phase === 'chasing') nextState = checkCaptures(nextState).state
   return syncLegacyFields(nextState)
