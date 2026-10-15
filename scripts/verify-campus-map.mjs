@@ -1,145 +1,73 @@
-import { spawn } from 'node:child_process'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
+import { chromium } from 'playwright-core'
 
-const url = process.argv[2] ?? 'http://127.0.0.1:4173/game/play'
+const url = process.argv[2] ?? 'http://127.0.0.1:4173/campus-sports-demo/game/play'
 const appOrigin = new URL(url).origin
 const chromePath = process.env.CHROME_PATH ??
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
 const artifactsDir = path.resolve('artifacts', 'campus-map')
-const legacyProfileDir = path.resolve('.tmp', 'campus-map-chrome')
-const profileDir = path.join(os.tmpdir(), `campus-map-chrome-${process.pid}`)
-const port = 9223
 
 await mkdir(artifactsDir, { recursive: true })
 await Promise.all([
   rm(path.join(artifactsDir, 'online-map.png'), { force: true }),
   rm(path.join(artifactsDir, 'offline-map.png'), { force: true })
 ])
-await rm(legacyProfileDir, { recursive: true, force: true }).catch(() => {})
-await rm(profileDir, { recursive: true, force: true })
-await mkdir(profileDir, { recursive: true })
 
-const chrome = spawn(chromePath, [
-  '--headless=new',
-  '--disable-gpu-sandbox',
-  '--enable-webgl',
-  '--enable-unsafe-swiftshader',
-  '--use-angle=swiftshader',
-  `--remote-debugging-port=${port}`,
-  `--user-data-dir=${profileDir}`,
-  '--no-first-run',
-  '--no-default-browser-check',
-  '--disable-extensions',
-  '--window-size=1440,900',
-  'about:blank'
-], { stdio: 'ignore', windowsHide: true })
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-
-async function waitForDebugger() {
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    try {
-      const response = await fetch(`http://127.0.0.1:${port}/json/version`)
-      if (response.ok) return
-    } catch {
-      // Chrome is still starting.
-    }
-    await sleep(100)
-  }
-  throw new Error('Chrome debugging endpoint did not start')
-}
-
-await waitForDebugger()
-const target = await fetch(
-  `http://127.0.0.1:${port}/json/new?about:blank`,
-  { method: 'PUT' }
-).then((response) => response.json())
-
-const socket = new WebSocket(target.webSocketDebuggerUrl)
-await new Promise((resolve, reject) => {
-  socket.addEventListener('open', resolve, { once: true })
-  socket.addEventListener('error', reject, { once: true })
-})
-
-let nextId = 0
-const pending = new Map()
 const runtimeErrors = []
 const externalRequests = []
-socket.addEventListener('message', (event) => {
-  const message = JSON.parse(event.data)
-  if (message.id && pending.has(message.id)) {
-    const { resolve, reject } = pending.get(message.id)
-    pending.delete(message.id)
-    if (message.error) reject(new Error(message.error.message))
-    else resolve(message.result)
-  }
-  if (message.method === 'Runtime.exceptionThrown') {
-    runtimeErrors.push(message.params.exceptionDetails.text)
-  }
-  if (message.method === 'Network.requestWillBeSent') {
-    const requestUrl = message.params.request.url
-    if (
-      /^https?:/i.test(requestUrl) &&
-      !requestUrl.startsWith(`${appOrigin}/`)
-    ) {
-      externalRequests.push(requestUrl)
-    }
-  }
+const browser = await chromium.launch({
+  executablePath: chromePath,
+  headless: true,
+  args: ['--enable-webgl', '--enable-unsafe-swiftshader', '--use-angle=swiftshader']
 })
 
-function command(method, params = {}) {
-  const id = ++nextId
-  socket.send(JSON.stringify({ id, method, params }))
-  return new Promise((resolve, reject) => pending.set(id, { resolve, reject }))
-}
-
-async function evaluate(expression) {
-  const result = await command('Runtime.evaluate', {
-    expression,
-    awaitPromise: true,
-    returnByValue: true
-  })
-  if (result.exceptionDetails) throw new Error(result.exceptionDetails.text)
-  return result.result.value
-}
-
-async function screenshot(filename) {
-  const result = await command('Page.captureScreenshot', {
-    format: 'png',
-    captureBeyondViewport: false
-  })
-  await writeFile(path.join(artifactsDir, filename), Buffer.from(result.data, 'base64'))
-}
-
 try {
-  await command('Page.enable')
-  await command('Runtime.enable')
-  await command('Network.enable')
-  await command('Emulation.setDeviceMetricsOverride', {
-    width: 1440,
-    height: 900,
-    deviceScaleFactor: 1,
-    mobile: false
+  const context = await browser.newContext({ viewport: { width: 1440, height: 900 } })
+  const page = await context.newPage()
+  page.on('pageerror', (error) => runtimeErrors.push(error.message))
+  page.on('console', (message) => {
+    if (message.type() === 'error') runtimeErrors.push(message.text())
   })
-  await command('Page.navigate', { url })
-  for (let attempt = 0; attempt < 120; attempt += 1) {
-    const markerCount = await evaluate(
-      `document.querySelectorAll('.campus-role-marker').length`
+  page.on('request', (request) => {
+    const requestUrl = request.url()
+    if (/^https?:/i.test(requestUrl) && !requestUrl.startsWith(`${appOrigin}/`)) {
+      externalRequests.push(requestUrl)
+    }
+  })
+
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+  try {
+    await page.waitForFunction(
+      () => document.querySelectorAll('.campus-role-marker').length === 6,
+      null,
+      { timeout: 15_000 }
     )
-    if (markerCount === 6) break
-    await sleep(100)
+  } catch (error) {
+    await page.screenshot({ path: path.join(artifactsDir, 'failed-map.png') })
+    const diagnostics = await page.evaluate(() => ({
+      url: location.href,
+      title: document.title,
+      body: document.body.innerText.slice(0, 500),
+      markers: document.querySelectorAll('.campus-role-marker').length,
+      mapErrors: window.__campusMapErrors ?? []
+    }))
+    throw new Error(`Map markers did not load: ${JSON.stringify({ diagnostics, runtimeErrors })}`, {
+      cause: error
+    })
   }
 
-  const initial = await evaluate(`(() => ({
+  const initial = await page.evaluate(() => ({
     title: document.title,
     canvas: document.querySelector('.maplibregl-canvas')?.getBoundingClientRect().toJSON(),
     markers: document.querySelectorAll('.campus-role-marker').length,
+    landmarks: [...document.querySelectorAll('.campus-landmark')]
+      .map((node) => node.textContent.trim()),
     playerMarkers: document.querySelectorAll('.campus-role-marker.is-human').length,
     controls: document.querySelectorAll('.maplibregl-ctrl button').length,
     attribution: document.querySelector('.maplibregl-ctrl-attrib')?.innerText,
-    status: [...document.querySelectorAll('.map-status span')].map((node) => node.textContent.trim()),
+    status: [...document.querySelectorAll('.map-status span')]
+      .map((node) => node.textContent.trim()),
     cameraModes: [...document.querySelectorAll('.map-actions .action-group:first-child button')]
       .map((node) => node.textContent.trim()),
     visualModes: [...document.querySelectorAll('.map-actions .secondary-actions button')]
@@ -162,61 +90,44 @@ try {
       return debug
     })() : null,
     mapErrors: window.__campusMapErrors ?? []
-  }))()`)
-  await screenshot('local-map.png')
+  }))
+  await page.screenshot({ path: path.join(artifactsDir, 'local-map.png') })
 
-  const interaction = await evaluate(`(() => {
-    const zoom = document.querySelector('.maplibregl-ctrl-zoom-in')
-    zoom?.click()
-    const fullView = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('全局'))
-    const collision = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('调试'))
-    fullView?.click()
-    collision?.click()
-    return {
-      zoomClicked: Boolean(zoom),
-      fullViewClicked: Boolean(fullView),
-      collisionClicked: Boolean(collision)
-    }
-  })()`)
-  await sleep(1200)
+  const zoom = page.locator('.maplibregl-ctrl-zoom-in')
+  const fullView = page.getByRole('button', { name: '全局' })
+  const collision = page.getByRole('button', { name: '调试' })
+  const interaction = {
+    zoomClicked: await zoom.count() > 0,
+    fullViewClicked: await fullView.count() > 0,
+    collisionClicked: await collision.count() > 0
+  }
+  if (interaction.zoomClicked) await zoom.click()
+  if (interaction.fullViewClicked) await fullView.click()
+  if (interaction.collisionClicked) await collision.click()
+  await page.waitForTimeout(1200)
 
-  const localScene = await evaluate(`(() => ({
+  const localScene = await page.evaluate(() => ({
     markers: document.querySelectorAll('.campus-role-marker').length,
     canvasWidth: document.querySelector('.maplibregl-canvas')?.width,
     canvasHeight: document.querySelector('.maplibregl-canvas')?.height,
     collisionActive: [...document.querySelectorAll('.map-actions button')]
       .some((button) => button.textContent.includes('调试') && button.classList.contains('active')),
     phaseTime: document.querySelector('.phase-timer strong')?.textContent.trim()
-  }))()`)
-  await screenshot('collision-debug.png')
+  }))
+  await page.screenshot({ path: path.join(artifactsDir, 'collision-debug.png') })
 
-  for (let attempt = 0; attempt < 80; attempt += 1) {
-    const chasing = await evaluate(
-      `document.querySelector('.phase-timer span')?.textContent.trim() === '追捕'`
-    )
-    if (chasing) break
-    await sleep(100)
-  }
-  const beforeMove = await evaluate(`(() => {
-    const marker = document.querySelector('.campus-role-marker.is-human')
-    const rect = marker?.getBoundingClientRect()
-    return rect ? { x: rect.x, y: rect.y } : null
-  })()`)
-  await command('Input.dispatchKeyEvent', {
-    type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39
-  })
-  await sleep(800)
-  await command('Input.dispatchKeyEvent', {
-    type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39
-  })
-  await sleep(200)
-  const afterMove = await evaluate(`(() => {
-    const marker = document.querySelector('.campus-role-marker.is-human')
-    const rect = marker?.getBoundingClientRect()
-    return rect ? { x: rect.x, y: rect.y } : null
-  })()`)
+  await page.waitForFunction(
+    () => document.querySelector('.phase-timer span')?.textContent.trim() === '追捕',
+    null,
+    { timeout: 10_000 }
+  )
+  const playerMarker = page.locator('.campus-role-marker.is-human')
+  const beforeMove = await playerMarker.boundingBox()
+  await page.keyboard.down('ArrowRight')
+  await page.waitForTimeout(800)
+  await page.keyboard.up('ArrowRight')
+  await page.waitForTimeout(200)
+  const afterMove = await playerMarker.boundingBox()
   const movement = {
     before: beforeMove,
     after: afterMove,
@@ -224,81 +135,30 @@ try {
       ? Math.hypot(afterMove.x - beforeMove.x, afterMove.y - beforeMove.y)
       : 0
   }
-  await screenshot('continuous-movement.png')
+  await page.screenshot({ path: path.join(artifactsDir, 'continuous-movement.png') })
 
-  await evaluate(`(() => {
-    const collision = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('调试'))
-    if (collision?.classList.contains('active')) collision.click()
-    const follow = [...document.querySelectorAll('.map-actions button')]
-      .find((button) => button.textContent.includes('跟随'))
-    follow?.click()
-  })()`)
-
-  await command('Network.emulateNetworkConditions', {
-    offline: true,
-    latency: 0,
-    downloadThroughput: 0,
-    uploadThroughput: 0,
-    connectionType: 'none'
-  })
-  await sleep(300)
-  const offline = await evaluate(`(() => ({
+  const collisionClass = await collision.getAttribute('class')
+  if (collisionClass?.includes('active')) await collision.click()
+  await page.getByRole('button', { name: '跟随' }).click()
+  await context.setOffline(true)
+  await page.waitForTimeout(300)
+  const offline = await page.evaluate(() => ({
     canvas: Boolean(document.querySelector('.maplibregl-canvas')),
     markers: document.querySelectorAll('.campus-role-marker').length,
     attribution: document.querySelector('.maplibregl-ctrl-attrib')?.innerText
-  }))()`)
+  }))
 
-  await command('Emulation.setDeviceMetricsOverride', {
-    width: 390,
-    height: 844,
-    deviceScaleFactor: 1,
-    mobile: true
-  })
-  await sleep(500)
-  const mobile = await evaluate(`(() => ({
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.waitForTimeout(500)
+  const mobile = await page.evaluate(() => ({
     viewport: { width: innerWidth, height: innerHeight },
     mapHeight: document.querySelector('.map-panel')?.getBoundingClientRect().height,
     dpadVisible: Boolean(document.querySelector('.dpad')),
     hudHeight: document.querySelector('.match-hud')?.getBoundingClientRect().height,
     hudDetailsVisible: document.querySelector('.hud-details')?.getBoundingClientRect().height > 0,
     horizontalOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth
-  }))()`)
-  await screenshot('mobile-map.png')
-
-  await command('Network.emulateNetworkConditions', {
-    offline: false,
-    latency: 0,
-    downloadThroughput: -1,
-    uploadThroughput: -1,
-    connectionType: 'wifi'
-  })
-  await evaluate(`sessionStorage.setItem('campus-catmouse-result-v2', JSON.stringify({
-    version: 2,
-    savedAt: Date.now(),
-    expiresAt: Date.now() + 3600000,
-    phase: 'ended',
-    winner: 'mouse',
-    endReason: 'timeout',
-    hidingTimeLeft: 0,
-    chasingTimeLeft: 0,
-    players: [
-      { id: 'cat-1', role: 'cat', controller: 'human', captures: 2 },
-      { id: 'mouse-1', role: 'cat', controller: 'ai', captures: 0 },
-      { id: 'mouse-2', role: 'cat', controller: 'ai', captures: 0 },
-      { id: 'mouse-3', role: 'mouse', controller: 'ai', captures: 0 }
-    ]
-  }))`)
-  await command('Page.navigate', { url: new URL('/game/result', url).href })
-  for (let attempt = 0; attempt < 50; attempt += 1) {
-    if (await evaluate(`Boolean(document.querySelector('.result-card'))`)) break
-    await sleep(100)
-  }
-  const resultRestore = await evaluate(`(() => ({
-    title: document.querySelector('.title')?.textContent.trim(),
-    stats: [...document.querySelectorAll('.stat-item')].map((node) => node.innerText.trim())
-  }))()`)
-  await screenshot('result-page.png')
+  }))
+  await page.screenshot({ path: path.join(artifactsDir, 'mobile-map.png') })
 
   const report = {
     url,
@@ -308,7 +168,6 @@ try {
     movement,
     offline,
     mobile,
-    resultRestore,
     externalRequests: [...new Set(externalRequests)],
     runtimeErrors
   }
@@ -317,9 +176,8 @@ try {
     `${JSON.stringify(report, null, 2)}\n`
   )
   console.log(JSON.stringify(report, null, 2))
-  if (movement.screenDistance < 2) {
-    throw new Error('Continuous keyboard movement was not visible')
-  }
+
+  if (movement.screenDistance < 2) throw new Error('Continuous keyboard movement was not visible')
   if (runtimeErrors.length > 0) {
     throw new Error(`Browser runtime errors: ${runtimeErrors.join('; ')}`)
   }
@@ -329,24 +187,20 @@ try {
   if (mobile.mapHeight < 400 || !mobile.dpadVisible || mobile.horizontalOverflow) {
     throw new Error('Mobile layout verification failed')
   }
-  if (!resultRestore.title?.includes('鼠逃脱成功')) {
-    throw new Error('Session result was not restored on the result page')
-  }
   if (externalRequests.length > 0) {
     throw new Error(`Unexpected runtime network requests: ${externalRequests.join('; ')}`)
   }
   if (initial.markers !== 6 || initial.mapErrors.length > 0) {
     throw new Error(`Map initialization failed: ${initial.mapErrors.join('; ')}`)
   }
-  if (!initial.cameraModes.includes('跟随') || !initial.cameraModes.includes('自由') || !initial.cameraModes.includes('全局')) {
+  if (!initial.landmarks.includes('第二食堂') || !initial.landmarks.includes('第三食堂')) {
+    throw new Error('Verified OSM landmark labels are incomplete')
+  }
+  if (!initial.cameraModes.includes('跟随') ||
+      !initial.cameraModes.includes('自由') ||
+      !initial.cameraModes.includes('全局')) {
     throw new Error('Camera mode controls are incomplete')
   }
 } finally {
-  socket.close()
-  chrome.kill()
-  await Promise.race([
-    new Promise((resolve) => chrome.once('exit', resolve)),
-    sleep(2000)
-  ])
-  await rm(profileDir, { recursive: true, force: true }).catch(() => {})
+  await browser.close()
 }

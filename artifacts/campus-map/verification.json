@@ -1,18 +1,27 @@
 {
-  "url": "http://127.0.0.1:4173/game/play",
+  "url": "http://127.0.0.1:4173/campus-sports-demo/game/play",
   "initial": {
     "title": "猫鼠大作战 · 对战 | 校园运动平台",
     "canvas": {
       "x": 24.03125,
-      "y": 67.25,
+      "y": 166.25,
       "width": 1392,
       "height": 816,
-      "top": 67.25,
+      "top": 166.25,
       "right": 1416.03125,
-      "bottom": 883.25,
+      "bottom": 982.25,
       "left": 24.03125
     },
     "markers": 6,
+    "landmarks": [
+      "第二食堂",
+      "第三食堂",
+      "艺术学院楼",
+      "办公楼",
+      "怡苑1号楼",
+      "怡苑2号楼",
+      "怡苑3号楼"
+    ],
     "playerMarkers": 1,
     "controls": 3,
     "attribution": "OpenStreetMap campus data · ODbL 1.0",
@@ -48,19 +57,17 @@
         "campus-buildings-3d",
         "activity-mask",
         "trails-layer",
-        "pursuit-glow",
-        "pursuit-line",
         "activity-border",
         "collision-debug"
       ],
       "center": [
-        113.81455654059164,
-        34.7857750114609
+        113.81510746552294,
+        34.78577501146093
       ],
-      "zoom": 17.38659628106075,
-      "pitch": 42,
-      "campusFeatures": 192,
-      "activityFeatures": 9
+      "zoom": 17.386596281067742,
+      "pitch": 38.00000000000001,
+      "campusFeatures": 204,
+      "activityFeatures": 10
     },
     "mapErrors": []
   },
@@ -74,18 +81,22 @@
     "canvasWidth": 1392,
     "canvasHeight": 816,
     "collisionActive": true,
-    "phaseTime": "4"
+    "phaseTime": "3"
   },
   "movement": {
     "before": {
-      "x": 51.53125,
-      "y": 606.75
+      "x": 57.53125,
+      "y": 634.75,
+      "width": 47,
+      "height": 47
     },
     "after": {
-      "x": 175.53125,
-      "y": 625.75
+      "x": 177.53125,
+      "y": 649.75,
+      "width": 47,
+      "height": 47
     },
-    "screenDistance": 125.4472000484666
+    "screenDistance": 120.93386622447824
   },
   "offline": {
     "canvas": true,
@@ -102,15 +113,6 @@
     "hudHeight": 49,
     "hudDetailsVisible": false,
     "horizontalOverflow": false
-  },
-  "resultRestore": {
-    "title": "鼠逃脱成功！",
-    "stats": [
-      "最终猫阵营\n3 只",
-      "存活老鼠\n1 只",
-      "玩家抓捕\n2 只",
-      "追捕剩余\n0 秒"
-    ]
   },
   "externalRequests": [],
   "runtimeErrors": []
