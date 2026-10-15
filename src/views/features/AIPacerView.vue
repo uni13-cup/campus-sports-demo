@@ -7,48 +7,89 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const back = () => router.push('/play')
 
-// —— 预设角色（台词包）——
-const characters = [
-  {
-    id: 'deer',
-    icon: '🦌',
-    name: '小鹿',
-    type: '鼓励型',
-    color: '#0ea394',
+// —— 陪跑风格台词包（数据层：预设角色与自定义角色共用同一套结构）——
+// 每条可以是：字符串 / 字符串数组（随机取一条）/ 函数（注入当前训练数据）
+const PACKS = {
+  cheer: {
+    type: '鼓励型', color: '#0ea394', icon: '🦌',
     lines: {
       start: '别紧张，跟着我就好，我们按自己的节奏来～',
       ahead: ['哇，比目标还快！你今天状态超好，不过别一下冲太猛哦。', '配速很漂亮！稳住呼吸，把这份感觉记住。'],
       onpace: ['就是这个节奏，你跑得很稳，继续保持！', '完美贴住目标配速，步频很均匀，加油！'],
-      behind: ['没关系，深呼吸，把步子放轻松，我就在你旁边。', '稍微慢了一点点，调整呼吸，我们一起追回来。']
+      behind: ['没关系，深呼吸，把步子放轻松，我就在你旁边。', '稍微慢了一点点，调整呼吸，我们一起追回来。'],
+      half: ['已经过半啦，最难的部分其实才刚开始，我们一起咬住！', '半程达成！呼吸和步子都很稳，继续相信自己。'],
+      final: ['最后一公里啦！冲过终点好好犒劳自己，加油！', '看到终点了吗？把背挺起来，用最帅的姿势冲线！'],
+      finish: () => '太棒了，全程我都在旁边看着呢，回去好好拉伸，下次我们再一起跑～',
+      tired: ['累就对了，说明你在变强。放慢 10 秒也行，别停下来走。', '手臂摆起来，吸气两步、呼气两步，我陪你撑过这一公里。'],
+      far: (d) => `还剩 ${d.remaining} 公里，按现在的节奏大概还要 ${d.eta}，我们一小段一小段来。`,
+      wait: ['好好好，我慢一点，你把呼吸调匀，跟上我三步就行。']
     }
   },
-  {
-    id: 'wolf',
-    icon: '🐺',
-    name: '老狼',
-    type: '严厉型',
-    color: '#b45309',
+  strict: {
+    type: '严厉型', color: '#b45309', icon: '🐺',
     lines: {
       start: '目标定了就别废话，跟紧我，掉队自己加练。',
       ahead: ['不错，这才像话。别得意，把配速给我咬住。', '有进步，但这只是开始，继续。'],
       onpace: ['配速稳住，可以。别松劲。', '达标了，保持摆臂，别让我抓到你掉速。'],
-      behind: ['掉速了！摆臂带起来，步频提上去，别让我等你。', '想停下来？没门，先追上我再说。']
+      behind: ['掉速了！摆臂带起来，步频提上去，别让我等你。', '想停下来？没门，先追上我再说。'],
+      half: ['过半了。后半程才是真训练，别给我垮。', '半程，保持。把现在的配速给我焊死。'],
+      final: ['最后一公里！冲刺，冲不动就给我滚到终点！', '别回头，冲线！今天的成绩你自己有数。'],
+      finish: () => '今天没掉队，算你及格。想达标？明天加练两公里。',
+      tired: ['累？你的对手可不会等你。再顶一公里。', '不想练的人早就在床上了，你还在这跑——继续。'],
+      far: (d) => `还剩 ${d.remaining} 公里。少看表，多迈腿。`,
+      wait: ['等你？行，我只给你 30 秒，30 秒后追上来。']
     }
   },
-  {
-    id: 'bot',
-    icon: '🤖',
-    name: 'PaceBot',
-    type: '数据型',
-    color: '#334155',
+  data: {
+    type: '数据型', color: '#334155', icon: '🤖',
     lines: {
       start: '系统就绪。已锁定目标配速，将逐公里进行播报。',
       ahead: ['检测到当前配速快于目标，运动表现良好，建议保留 10% 体能余量。'],
       onpace: ['当前配速与目标偏差小于 3 秒，处于最优区间，请保持。'],
-      behind: ['警告：当前配速低于目标，建议提高步频、缩小步幅，30 秒后复测。']
+      behind: ['警告：当前配速低于目标，建议提高步频、缩小步幅，30 秒后复测。'],
+      half: (d) => `里程过半，当前平均配速 ${d.avg}，建议保持心率区间、注意补给。`,
+      final: ['进入最后一公里，可将步频提升至 180 spm，准备冲刺。'],
+      finish: (d) => `本次训练结束。配速稳定率 ${d.steady}%，最快 ${d.best}、最慢 ${d.worst}，训练报告已生成，数据仅存本地。`,
+      tired: ['疲劳反馈已记录。建议：步幅缩小 5%、保持步频，切勿直接停跑。'],
+      far: (d) => `剩余 ${d.remaining} 公里，预计剩余用时 ${d.eta}。`,
+      wait: ['已进入巡航伴跑模式，配速下调 5 秒/公里，请在 200 米内回位。']
+    }
+  },
+  funny: {
+    type: '损友型', color: '#db2777', icon: '🐱',
+    lines: {
+      start: '哈喽啊，今天别又跑一半拐去买奶茶啊。',
+      ahead: ['哟，跑这么快？前面是有共享单车要扫吗？', '可以啊，脚后跟都快跑出火星子了，稳住别摔。'],
+      onpace: ['配速拿捏，丑但稳，也是一种实力。', '这个速度非常合适——既不会瘦太快让朋友认不出，也不会白跑。'],
+      behind: ['哎哎哎，前面走路的大爷都超你三回了。', '要不要我帮你拦辆校园小巴？算了，跑都跑了。'],
+      half: ['半程了！奶茶店还有两公里——我是说终点还有两公里。', '跑完一半，腹肌正在感谢你，再坚持一下。'],
+      final: ['最后一公里！冲啊！跑完你就是朋友圈最靓的仔（分组可见也行）！'],
+      finish: () => '行了别叉着腰喘了，走两步缓缓，记得拉伸，不然明天下楼得扶墙。',
+      tired: ['累？你昨晚追剧到两点的时候可没说累。', '想想你收藏的「跑步必瘦」，现在就是它生效的时候。'],
+      far: (d) => `还剩 ${d.remaining} 公里，近得很，也就是再刷六条短视频的事。`,
+      wait: ['等你等你，反正我一个 AI 也不累，就是有点丢人。']
     }
   }
+}
+
+// 预设角色（引用风格包）
+const presetChars = [
+  { id: 'deer', name: '小鹿', pack: 'cheer' },
+  { id: 'wolf', name: '老狼', pack: 'strict' },
+  { id: 'bot', name: 'PaceBot', pack: 'data' }
 ]
+
+// 把角色规格补全为可渲染对象（预设与自定义同构）
+function buildChar(spec) {
+  const pk = PACKS[spec.pack]
+  return {
+    ...spec,
+    icon: spec.icon || pk.icon,
+    type: pk.type + (spec.custom ? ' · 自定义' : ''),
+    color: pk.color,
+    lines: pk.lines
+  }
+}
 
 // —— 目标配速（秒/公里）——
 const goals = [
@@ -58,11 +99,105 @@ const goals = [
   { label: "7'00\"", sec: 420 }
 ]
 
-const activeChar = ref(characters[0])
+// —— 自定义角色（localStorage 持久化，刷新/下次打开还在）——
+const CUSTOM_KEY = 'ai-pacer-custom-chars-v1'
+const customChars = ref(loadCustom())
+const allChars = computed(() => [
+  ...presetChars.map(buildChar),
+  ...customChars.value.map(buildChar)
+])
+const activeChar = ref(allChars.value[0])
+
+function loadCustom() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]')
+    return Array.isArray(raw) ? raw.filter((x) => x && PACKS[x.pack]) : []
+  } catch {
+    return []
+  }
+}
+function persistCustom() {
+  localStorage.setItem(CUSTOM_KEY, JSON.stringify(customChars.value))
+}
+
+// 自定义角色表单
+const charIcons = ['🦌', '🐺', '🤖', '🐱', '🐯', '🦊', '🐼', '🦁', '🐰', '🐨']
+const styleOptions = [
+  { id: 'cheer', label: '元气鼓励' },
+  { id: 'strict', label: '硬核严厉' },
+  { id: 'data', label: '理性数据' },
+  { id: 'funny', label: '损友搞笑' }
+]
+const showCharForm = ref(false)
+const charForm = ref({ name: '', icon: '🐱', pack: 'funny', catchphrase: '' })
+const formError = ref('')
+
+function openCharForm() {
+  charForm.value = { name: '', icon: '🐱', pack: 'funny', catchphrase: '' }
+  formError.value = ''
+  showCharForm.value = true
+}
+function saveCustomChar() {
+  const name = charForm.value.name.trim()
+  if (!name) { formError.value = '给你的陪跑起个名字吧'; return }
+  if (name.length > 8) { formError.value = '名字别超过 8 个字'; return }
+  const spec = {
+    id: 'custom-' + Date.now(),
+    custom: true,
+    name,
+    icon: charForm.value.icon,
+    pack: charForm.value.pack,
+    catchphrase: charForm.value.catchphrase.trim().slice(0, 12)
+  }
+  customChars.value.push(spec)
+  persistCustom()
+  showCharForm.value = false
+  selectChar(buildChar(spec))
+}
+function removeCustomChar(c) {
+  if (!c.custom) return
+  customChars.value = customChars.value.filter((x) => x.id !== c.id)
+  persistCustom()
+  if (activeChar.value.id === c.id) selectChar(allChars.value[0])
+}
+
+// —— 目标：距离 / 配速（预设 + 自定义）——
 const activeGoal = ref(goals[1])
-// —— 目标距离（公里）——
 const distances = [3, 5, 10]
 const goalKm = ref(5)
+const showKmInput = ref(false)
+const kmDraft = ref('')
+const kmError = ref('')
+const showPaceInput = ref(false)
+const paceMin = ref('6')
+const paceSec = ref('10')
+const paceError = ref('')
+const locked = computed(() => totalKm.value > 0) // 开跑后目标锁定
+
+function applyCustomKm() {
+  const v = Number(kmDraft.value)
+  if (!Number.isFinite(v) || v < 1 || v > 42 || !Number.isInteger(v)) {
+    kmError.value = '请输入 1~42 的整数公里'
+    return
+  }
+  goalKm.value = v
+  showKmInput.value = false
+  kmError.value = ''
+}
+function applyCustomPace() {
+  const m = Number(paceMin.value), s = Number(paceSec.value)
+  if (![m, s].every(Number.isInteger) || m < 3 || m > 10 || s < 0 || s > 59) {
+    paceError.value = '配速范围 3′00″~10′00″，秒 0~59'
+    return
+  }
+  const sec = m * 60 + s
+  activeGoal.value = { label: fmtPace(sec), sec, custom: true }
+  showPaceInput.value = false
+  paceError.value = ''
+}
+const isCustomKm = computed(() => !distances.includes(goalKm.value))
+const goalChipLabel = computed(() => `✏️ ${goalKm} km`)
+
 const voiceOn = ref(false)
 const feed = ref([])          // 播报流
 const segments = ref([])      // 每公里数据
@@ -70,32 +205,32 @@ const feedEl = ref(null)
 
 const totalKm = computed(() => segments.value.length)
 const finished = computed(() => totalKm.value >= goalKm.value)
-const avgPace = computed(() => {
-  if (!segments.value.length) return null
-  const avg = segments.value.reduce((s, x) => s + x.sec, 0) / segments.value.length
-  return fmtPace(avg)
-})
+const avgSec = computed(() =>
+  segments.value.length ? segments.value.reduce((s, x) => s + x.sec, 0) / segments.value.length : null
+)
+const avgPace = computed(() => (avgSec.value === null ? null : fmtPace(avgSec.value)))
 // 总用时（秒 → m分ss秒）
-const totalDur = computed(() =>
-  segments.value.reduce((s, x) => s + x.sec, 0)
-)
+const totalDur = computed(() => segments.value.reduce((s, x) => s + x.sec, 0))
 const durText = computed(() => fmtDur(totalDur.value))
-// 达标判定：平均配速不慢于目标
-const achieved = computed(() => {
-  if (!segments.value.length) return false
-  const avg = totalDur.value / segments.value.length
-  return avg <= activeGoal.value.sec + 3
-})
-const steadyCount = computed(() =>
-  segments.value.filter((x) => Math.abs(x.delta) < 4).length
+// 计划用时（按目标配速）
+const planDurText = computed(() => fmtDur(goalKm.value * activeGoal.value.sec))
+// 预计完赛时间 ETA：跑起来按当前均速，没跑按目标配速
+const etaText = computed(() =>
+  fmtDur(Math.round((avgSec.value ?? activeGoal.value.sec) * goalKm.value))
 )
-
-// 完赛收尾台词（本地预设）
-const finishLines = {
-  deer: '太棒了，全程我都在旁边看着呢，回去好好拉伸，下次我们再一起跑～',
-  wolf: '今天没掉队，算你及格。想达标？明天加练两公里。',
-  bot: '本次训练结束。分段配速稳定率 {steady}%，已生成训练摘要，数据仅存本地。'
-}
+const remainKm = computed(() => goalKm.value - totalKm.value)
+const remainText = computed(() =>
+  fmtDur(Math.round((avgSec.value ?? activeGoal.value.sec) * Math.max(0, remainKm.value)))
+)
+// 达标判定：平均配速不慢于目标
+const achieved = computed(() =>
+  avgSec.value !== null && avgSec.value <= activeGoal.value.sec + 3
+)
+const steadyCount = computed(() => segments.value.filter((x) => Math.abs(x.delta) < 4).length)
+const bestPace = computed(() => segments.value.length ? fmtPace(Math.min(...segments.value.map((x) => x.sec))) : null)
+const worstPace = computed(() => segments.value.length ? fmtPace(Math.max(...segments.value.map((x) => x.sec))) : null)
+// 与计划的总用时差（正=慢于计划）
+const planGap = computed(() => totalDur.value - activeGoal.value.sec * totalKm.value)
 
 function fmtPace(sec) {
   const m = Math.floor(sec / 60)
@@ -110,15 +245,40 @@ function fmtDur(sec) {
 }
 
 function pickGoal(g) {
+  if (locked.value) return
   activeGoal.value = g
+  showPaceInput.value = false
 }
 function pickDistance(d) {
-  if (totalKm.value > 0) return // 开跑后距离锁定，重置后才可改
+  if (locked.value) return // 开跑后距离锁定，重置后才可改
   goalKm.value = d
+  showKmInput.value = false
 }
 
 function pick(arr) {
   return arr[Math.floor(Math.random() * arr.length)]
+}
+
+// 当前训练数据（注入函数型台词）
+function trainData() {
+  return {
+    km: goalKm.value,
+    pace: activeGoal.value.label,
+    plan: planDurText.value,
+    remaining: remainKm.value,
+    eta: remainText.value,
+    avg: avgPace.value ?? activeGoal.value.label
+  }
+}
+
+// 取角色台词：字符串 / 数组随机 / 函数注入数据；自定义角色按概率带口头禅
+function lineOf(char, key, data) {
+  const raw = char.lines[key] ?? ''
+  let line = typeof raw === 'function' ? raw(data) : Array.isArray(raw) ? pick(raw) : raw
+  if (char.catchphrase && !['start', 'finish'].includes(key) && Math.random() < 0.45) {
+    line += `（${char.catchphrase}）`
+  }
+  return line
 }
 
 function speak(text) {
@@ -130,9 +290,10 @@ function speak(text) {
   window.speechSynthesis.speak(u)
 }
 
-function pushFeed(text, mood) {
+function pushFeed(text, mood = 'start') {
   feed.value.push({
     id: Date.now() + Math.random(),
+    who: 'ai',
     icon: activeChar.value.icon,
     name: activeChar.value.name,
     text,
@@ -144,47 +305,88 @@ function pushFeed(text, mood) {
   })
 }
 
+// 用户向陪跑喊话（右侧气泡）
+function pushUser(text) {
+  feed.value.push({ id: Date.now() + Math.random(), who: 'me', text })
+  nextTick(() => {
+    if (feedEl.value) feedEl.value.scrollTop = feedEl.value.scrollHeight
+  })
+}
+
 function selectChar(c) {
   activeChar.value = c
   window.speechSynthesis?.cancel()
-  pushFeed(c.lines.start, 'start')
+  pushFeed(lineOf(c, 'start'), 'start')
 }
 
-// 模拟跑完 1 公里：配速在目标附近 -20~+25 秒随机波动
+// 模拟跑完 1 公里：目标附近随机波动 + 后程疲劳偏移（越往后越容易掉秒，贴近真实）
 function runSegment() {
-  const deltaSec = Math.floor(Math.random() * 46) - 20
+  if (finished.value) return
+  const fatigue = Math.round((segments.value.length / goalKm.value) * 10)
+  const deltaSec = Math.floor(Math.random() * 46) - 20 + fatigue
   const sec = activeGoal.value.sec + deltaSec
   const mood = deltaSec <= -4 ? 'ahead' : deltaSec >= 4 ? 'behind' : 'onpace'
   segments.value.push({ sec, delta: deltaSec, mood })
+  const n = segments.value.length
+  const isFinal = n >= goalKm.value
+  const isHalf = !isFinal && goalKm.value >= 4 && n === Math.ceil(goalKm.value / 2)
 
-  const pack = activeChar.value.lines[mood]
-  const line = Array.isArray(pack) ? pick(pack) : pack
   const diffTxt = deltaSec === 0
     ? '与目标持平'
     : `${deltaSec < 0 ? '快' : '慢'} ${Math.abs(deltaSec)} 秒`
-  pushFeed(`第 ${segments.value.length} 公里 · ${fmtPace(sec)}/公里，${diffTxt}。${line}`, mood)
+  const data = trainData()
+  // 最后一公里用冲刺台词，其余用常规快慢台词
+  const line = lineOf(activeChar.value, isFinal ? 'final' : mood, data)
+  pushFeed(
+    `第 ${n} 公里${isFinal ? '（最后一公里）' : ''} · ${fmtPace(sec)}/公里，${diffTxt}。累计 ${fmtDur(totalDur.value)}，预计 ${etaText.value} 完赛。${line}`,
+    mood
+  )
+
+  // 过半提示
+  if (isHalf) pushFeed(lineOf(activeChar.value, 'half', data), 'onpace')
 
   // 跑完目标距离 → 出训练摘要（模拟「生成训练报告」，数据只在本地）
-  if (segments.value.length >= goalKm.value) {
+  if (isFinal) {
     const steady = Math.round((steadyCount.value / goalKm.value) * 100)
-    let tail = finishLines[activeChar.value.id]
-    tail = tail.replace('{steady}', String(steady))
+    const gap = planGap.value
+    const gapTxt = gap === 0
+      ? '与计划持平'
+      : `${gap < 0 ? '快' : '慢'}于计划 ${Math.abs(Math.round(gap))} 秒`
+    const tail = lineOf(activeChar.value, 'finish', { ...data, steady, best: bestPace.value, worst: worstPace.value })
     pushFeed(
-      `🏁 完赛！${goalKm.value} 公里总用时 ${fmtDur(totalDur.value)}，平均配速 ${avgPace.value}/公里（目标 ${activeGoal.value.label}），配速稳定率 ${steady}%，${achieved.value ? '平均配速达标' : '未达目标配速'}。${tail}`,
+      `🏁 完赛！${goalKm.value} 公里总用时 ${fmtDur(totalDur.value)}（计划 ${planDurText.value}，${gapTxt}），平均配速 ${avgPace.value}/公里，最快 ${bestPace.value}、最慢 ${worstPace.value}，配速稳定率 ${steady}%，${achieved.value ? '平均配速达标' : '未达目标配速'}。${tail}`,
       'start'
     )
   }
+}
+
+// 跑步中向陪跑快捷喊话
+const quickTalks = [
+  { key: 'tired', label: '🥵 我有点累' },
+  { key: 'far', label: '⏱ 还有多远' },
+  { key: 'wait', label: '🙏 等等我' }
+]
+function ask(kind) {
+  const talk = quickTalks.find((x) => x.key === kind)
+  pushUser(talk.label.replace(/^\S+\s/, ''))
+  const data = trainData()
+  let mood = 'start'
+  if (kind === 'far') mood = 'onpace'
+  if (kind === 'tired') mood = 'behind'
+  pushFeed(lineOf(activeChar.value, kind, data), mood)
 }
 
 function reset() {
   window.speechSynthesis?.cancel()
   feed.value = []
   segments.value = []
-  pushFeed(activeChar.value.lines.start, 'start')
+  showKmInput.value = false
+  showPaceInput.value = false
+  pushFeed(lineOf(activeChar.value, 'start'), 'start')
 }
 
 // 初始化第一条播报
-pushFeed(characters[0].lines.start, 'start')
+pushFeed(lineOf(allChars.value[0], 'start'), 'start')
 </script>
 
 <template>
@@ -199,17 +401,70 @@ pushFeed(characters[0].lines.start, 'start')
     <div class="section-head"><h2>选择陪跑角色</h2></div>
     <div class="chars">
       <button
-        v-for="c in characters"
+        v-for="c in allChars"
         :key="c.id"
         class="char-card"
         :class="{ active: activeChar.id === c.id }"
         :style="activeChar.id === c.id ? { borderColor: c.color } : {}"
         @click="selectChar(c)"
       >
+        <span
+          v-if="c.custom"
+          class="char-del"
+          title="删除该自定义角色"
+          @click.stop="removeCustomChar(c)"
+        >×</span>
         <span class="char-icon" :style="{ background: c.color + '1a' }">{{ c.icon }}</span>
         <strong>{{ c.name }}</strong>
         <span>{{ c.type }}</span>
       </button>
+      <button v-if="!showCharForm" class="char-card add-card" @click="openCharForm">
+        <span class="char-icon add-icon">＋</span>
+        <strong>自定义</strong>
+        <span>创建我的陪跑</span>
+      </button>
+    </div>
+
+    <!-- 自定义角色表单 -->
+    <div v-if="showCharForm" class="char-form card-box">
+      <label class="form-row">
+        <span>昵称</span>
+        <input v-model="charForm.name" maxlength="8" placeholder="给 TA 起个名字（最多 8 字）" />
+      </label>
+      <div class="form-row">
+        <span>头像</span>
+        <div class="icon-pick">
+          <button
+            v-for="ic in charIcons"
+            :key="ic"
+            type="button"
+            :class="{ active: charForm.icon === ic }"
+            @click="charForm.icon = ic"
+          >{{ ic }}</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <span>风格</span>
+        <div class="chips">
+          <button
+            v-for="s in styleOptions"
+            :key="s.id"
+            type="button"
+            class="chip"
+            :class="{ active: charForm.pack === s.id }"
+            @click="charForm.pack = s.id"
+          >{{ s.label }}</button>
+        </div>
+      </div>
+      <label class="form-row">
+        <span>口头禅</span>
+        <input v-model="charForm.catchphrase" maxlength="12" placeholder="选填，如：再坚持一下（最多 12 字）" />
+      </label>
+      <p v-if="formError" class="form-error">{{ formError }}</p>
+      <div class="form-actions">
+        <button type="button" class="ghost-btn" @click="showCharForm = false">取消</button>
+        <button type="button" class="save-btn" @click="saveCustomChar">保存并选用</button>
+      </div>
     </div>
 
     <!-- 目标距离 -->
@@ -218,11 +473,25 @@ pushFeed(characters[0].lines.start, 'start')
       <button
         v-for="d in distances"
         :key="d"
+        type="button"
         class="chip"
         :class="{ active: goalKm === d }"
-        :disabled="totalKm > 0"
+        :disabled="locked"
         @click="pickDistance(d)"
       >{{ d }} 公里</button>
+      <button
+        type="button"
+        class="chip custom-chip"
+        :class="{ active: isCustomKm }"
+        :disabled="locked"
+        @click="showKmInput = !showKmInput"
+      >{{ isCustomKm ? goalChipLabel : '✏️ 自定义' }}</button>
+    </div>
+    <div v-if="showKmInput && !locked" class="inline-input">
+      <input v-model="kmDraft" type="number" min="1" max="42" step="1" placeholder="1~42" />
+      <span>公里</span>
+      <button type="button" class="mini-btn" @click="applyCustomKm">确定</button>
+      <span v-if="kmError" class="input-error">{{ kmError }}</span>
     </div>
 
     <!-- 目标配速 -->
@@ -231,11 +500,36 @@ pushFeed(characters[0].lines.start, 'start')
       <button
         v-for="g in goals"
         :key="g.label"
+        type="button"
         class="chip"
-        :class="{ active: activeGoal.label === g.label }"
+        :class="{ active: activeGoal.sec === g.sec }"
+        :disabled="locked"
         @click="pickGoal(g)"
       >{{ g.label }} / km</button>
+      <button
+        type="button"
+        class="chip custom-chip"
+        :class="{ active: activeGoal.custom }"
+        :disabled="locked"
+        @click="showPaceInput = !showPaceInput"
+      >{{ activeGoal.custom ? `✏️ ${activeGoal.label}` : '✏️ 自定义' }}</button>
     </div>
+    <div v-if="showPaceInput && !locked" class="inline-input">
+      <input v-model="paceMin" type="number" min="3" max="10" />
+      <span>分</span>
+      <input v-model="paceSec" type="number" min="0" max="59" />
+      <span>秒 / 公里</span>
+      <button type="button" class="mini-btn" @click="applyCustomPace">确定</button>
+      <span v-if="paceError" class="input-error">{{ paceError }}</span>
+    </div>
+
+    <!-- 今日训练计划（跑前简报，贴近真实运动 App） -->
+    <section class="plan-card">
+      <div class="plan-item"><strong>{{ goalKm }}</strong><span>目标公里</span></div>
+      <div class="plan-item"><strong>{{ activeGoal.label }}</strong><span>目标配速</span></div>
+      <div class="plan-item"><strong class="plan-time">{{ planDurText }}</strong><span>计划完赛</span></div>
+    </section>
+    <p v-if="locked" class="lock-tip">🔒 已开跑，目标锁定；重置后可重新设置</p>
 
     <!-- 数据面板 -->
     <section class="dash">
@@ -244,6 +538,7 @@ pushFeed(characters[0].lines.start, 'start')
       <div><strong :class="segments.length && segments[segments.length-1].mood">
         {{ segments.length ? fmtPace(segments[segments.length-1].sec) : '--' }}
       </strong><span>上公里</span></div>
+      <div><strong class="eta-num">{{ etaText }}</strong><span>预计完赛</span></div>
     </section>
     <div class="km-progress">
       <div class="km-progress-fill" :style="{ width: Math.min(100, (totalKm / goalKm) * 100) + '%' }"></div>
@@ -264,14 +559,31 @@ pushFeed(characters[0].lines.start, 'start')
         v-for="f in feed"
         :key="f.id"
         class="bubble"
-        :class="f.mood"
+        :class="[f.who === 'me' ? 'me' : f.mood]"
       >
-        <span class="bubble-icon">{{ f.icon }}</span>
-        <div class="bubble-body">
-          <span class="bubble-name">{{ f.name }}</span>
-          <p>{{ f.text }}</p>
-        </div>
+        <template v-if="f.who === 'me'">
+          <div class="bubble-body"><p>{{ f.text }}</p></div>
+          <span class="bubble-icon me-icon">🏃</span>
+        </template>
+        <template v-else>
+          <span class="bubble-icon">{{ f.icon }}</span>
+          <div class="bubble-body">
+            <span class="bubble-name">{{ f.name }}</span>
+            <p>{{ f.text }}</p>
+          </div>
+        </template>
       </div>
+    </div>
+
+    <!-- 跑步中快捷喊话 -->
+    <div class="quick-talk">
+      <button
+        v-for="t in quickTalks"
+        :key="t.key"
+        type="button"
+        :disabled="finished"
+        @click="ask(t.key)"
+      >{{ t.label }}</button>
     </div>
 
     <!-- 分段配速历史 -->
@@ -321,21 +633,85 @@ pushFeed(characters[0].lines.start, 'start')
 .section-head h2 { font-size: 16px; color: var(--color-text); }
 
 /* 角色卡 */
-.chars { display: flex; gap: 10px; }
+.chars { display: flex; gap: 10px; flex-wrap: wrap; }
 .char-card {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  position: relative;
+  flex: 1 1 22%; min-width: 72px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
   background: var(--color-white); border: 2px solid var(--color-border);
   border-radius: var(--radius); box-shadow: var(--shadow);
   padding: 14px 6px; cursor: pointer; transition: border-color 0.15s, transform 0.15s;
 }
 .char-card:active { transform: scale(0.97); }
 .char-card strong { font-size: 14px; color: var(--color-text); }
-.char-card span:last-child { font-size: 11.5px; color: var(--color-text-light); }
+.char-card span:last-child { font-size: 11.5px; color: var(--color-text-light); text-align: center; }
 .char-icon {
   width: 46px; height: 46px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
   font-size: 24px; margin-bottom: 4px;
 }
+.char-del {
+  position: absolute; top: 4px; right: 6px;
+  width: 18px; height: 18px; line-height: 16px; text-align: center;
+  border-radius: 50%; background: var(--color-border); color: var(--color-text-light);
+  font-size: 13px;
+}
+.add-card { border-style: dashed; box-shadow: none; }
+.add-icon { background: var(--color-primary-light) !important; color: var(--color-primary); font-size: 22px; font-weight: 300; }
+
+/* 自定义角色表单 */
+.char-form { margin-top: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.form-row { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--color-text); }
+.form-row > span { font-weight: 600; }
+.form-row input[type="text"], .form-row input {
+  border: 1px solid var(--color-border); border-radius: 10px;
+  padding: 9px 12px; font-size: 13px; outline: none; background: var(--color-white); color: var(--color-text);
+}
+.form-row input:focus { border-color: var(--color-primary); }
+.icon-pick { display: flex; flex-wrap: wrap; gap: 6px; }
+.icon-pick button {
+  width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--color-border);
+  background: var(--color-white); font-size: 18px; cursor: pointer;
+}
+.icon-pick button.active { border-color: var(--color-primary); background: var(--color-primary-light); }
+.form-error { margin: 0; font-size: 12px; color: #c2410c; }
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.form-actions .ghost-btn { width: auto; padding: 9px 16px; }
+.save-btn {
+  border: none; border-radius: 12px; padding: 9px 18px;
+  background: var(--color-primary); color: #fff; font-size: 13.5px; font-weight: 700; cursor: pointer;
+}
+
+/* 自定义目标输入 */
+.custom-chip { border-style: dashed; }
+.inline-input {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 8px; background: var(--color-white); border: 1px solid var(--color-border);
+  border-radius: var(--radius); padding: 10px 12px; font-size: 13px; color: var(--color-text);
+}
+.inline-input input {
+  width: 64px; border: 1px solid var(--color-border); border-radius: 8px;
+  padding: 6px 8px; font-size: 13px; text-align: center; outline: none; background: var(--color-white); color: var(--color-text);
+}
+.inline-input input:focus { border-color: var(--color-primary); }
+.mini-btn {
+  border: none; border-radius: 8px; padding: 6px 14px;
+  background: var(--color-primary); color: #fff; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.input-error { font-size: 12px; color: #c2410c; }
+
+/* 跑前训练计划 */
+.plan-card {
+  margin-top: 16px; display: flex;
+  background: var(--color-white); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden;
+}
+.plan-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 4px; }
+.plan-item + .plan-item { border-left: 1px solid var(--color-border); }
+.plan-item strong { font-size: 17px; color: var(--color-primary-dark); font-variant-numeric: tabular-nums; }
+.plan-item .plan-time { font-size: 14px; }
+.plan-item span { font-size: 11px; color: var(--color-text-light); }
+.lock-tip { margin: 8px 2px 0; font-size: 11.5px; color: var(--color-text-light); }
 
 /* 配速 chips */
 .chips { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -354,8 +730,9 @@ pushFeed(characters[0].lines.start, 'start')
   background: linear-gradient(140deg, #14544d, #0f2f2c);
   border-radius: 18px; padding: 16px 10px;
 }
-.dash div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.dash strong { font-size: 22px; color: #fff; font-variant-numeric: tabular-nums; }
+.dash div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; }
+.dash strong { font-size: 18px; color: #fff; font-variant-numeric: tabular-nums; }
+.dash .eta-num { font-size: 13.5px; line-height: 22px; }
 .dash span { font-size: 11px; color: rgba(255,255,255,0.6); }
 .dash .ahead { color: #6ff0c8; }
 .dash .behind { color: #ffb4b4; }
@@ -418,6 +795,24 @@ pushFeed(characters[0].lines.start, 'start')
 .bubble.behind .bubble-body { background: #fdeeee; }
 .bubble.onpace .bubble-body { background: #fef8e7; }
 .bubble.start .bubble-body { background: #f3f8f7; }
+/* 用户喊话气泡（右侧） */
+.bubble.me { flex-direction: row-reverse; }
+.bubble.me .bubble-body {
+  background: var(--color-primary); color: #fff;
+  border-radius: 14px 4px 14px 14px;
+}
+.bubble.me .bubble-body p { color: #fff; margin: 0; }
+.me-icon { background: var(--color-primary) !important; }
+
+/* 快捷喊话 */
+.quick-talk { display: flex; gap: 8px; margin-top: 10px; }
+.quick-talk button {
+  flex: 1; border: 1px solid var(--color-border); background: var(--color-white);
+  border-radius: 999px; padding: 8px 6px; font-size: 12.5px; color: var(--color-text);
+  cursor: pointer;
+}
+.quick-talk button:active { background: var(--color-primary-light); }
+.quick-talk button:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* 操作 */
 .actions { display: flex; gap: 10px; margin-top: 16px; }
