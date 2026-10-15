@@ -1,6 +1,9 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+// 真实数据连接：复用核验模块的传感器管线（加速度→步频→速度→真实里程，判定通过才累计）
+import { HZ, WIN, DT, analyze, classify, speedFromCadence } from '../../verify/analyzer'
+import { attachMotion, requestMotionPermission, isSecure } from '../../verify/sensor'
 
 // AI 角色智能陪跑：选角色 + 定目标配速 → 每跑完 1 公里播报配速变化
 // 全部使用本地预设语音包：不接大模型、不需要网络，离线也能演示
@@ -346,18 +349,7 @@ function runSegment() {
   if (isHalf) pushFeed(lineOf(activeChar.value, 'half', data), 'onpace')
 
   // 跑完目标距离 → 出训练摘要（模拟「生成训练报告」，数据只在本地）
-  if (isFinal) {
-    const steady = Math.round((steadyCount.value / goalKm.value) * 100)
-    const gap = planGap.value
-    const gapTxt = gap === 0
-      ? '与计划持平'
-      : `${gap < 0 ? '快' : '慢'}于计划 ${Math.abs(Math.round(gap))} 秒`
-    const tail = lineOf(activeChar.value, 'finish', { ...data, steady, best: bestPace.value, worst: worstPace.value })
-    pushFeed(
-      `🏁 完赛！${goalKm.value} 公里总用时 ${fmtDur(totalDur.value)}（计划 ${planDurText.value}，${gapTxt}），平均配速 ${avgPace.value}/公里，最快 ${bestPace.value}、最慢 ${worstPace.value}，配速稳定率 ${steady}%，${achieved.value ? '平均配速达标' : '未达目标配速'}。${tail}`,
-      'start'
-    )
-  }
+  if (isFinal) finishReport('sim')
 }
 
 // 跑步中向陪跑快捷喊话
@@ -378,11 +370,153 @@ function ask(kind) {
 
 function reset() {
   window.speechSynthesis?.cancel()
+  stopLive()
   feed.value = []
   segments.value = []
   showKmInput.value = false
   showPaceInput.value = false
   pushFeed(lineOf(activeChar.value, 'start'), 'start')
+}
+
+// ================= 真实数据连接：传感器陪跑 =================
+// 复用核验模块管线：加速度 50Hz → 滑动窗自相关 → 步频/速度 → 判定为真跑步才累计里程
+const mode = ref('sim') // sim 模拟演示 | live 连接真实传感器
+const securePage = isSecure()
+const live = reactive({
+  on: false, cad: 0, speed: 0, km: 0, sec: 0,
+  verdict: '未开始', verdictCls: '', state: 'idle' // idle|requesting|on|denied|nodata
+})
+let liveTimer = null, liveDetach = null, liveBuf = [], livePhaseT = 0, liveLatest = null, liveHasData = false, segStartSec = 0
+
+function switchMode(m) {
+  if (m === mode.value) return
+  stopLive()
+  mode.value = m
+}
+
+async function startLive() {
+  if (live.on || finished.value) return
+  live.state = 'requesting'
+  const granted = await requestMotionPermission()
+  if (!granted) { live.state = 'denied'; live.verdict = '未授权传感器权限'; return }
+  liveBuf = []; livePhaseT = 0; liveLatest = null; liveHasData = false
+  if (totalKm.value === 0) { live.km = 0; live.sec = 0; segStartSec = 0 }
+  liveDetach = attachMotion((v) => { liveLatest = v; liveHasData = true; live.state = 'on' })
+  live.on = true
+  live.verdict = '采样中…'
+  live.verdictCls = ''
+  liveTimer = setInterval(liveTick, 1000 * DT)
+  setTimeout(() => { if (live.on && !liveHasData) live.state = 'nodata' }, 3000)
+  pushFeed(`📡 已连接手机运动传感器，开始真实陪跑。目标 ${goalKm.value} 公里 / ${activeGoal.value.label}/公里，判定为真实跑步才累计里程，跑起来我逐公里播报。`, 'start')
+}
+
+function liveTick() {
+  if (!liveHasData) return
+  liveBuf.push(liveLatest)
+  if (liveBuf.length > WIN) liveBuf.shift()
+  livePhaseT += DT
+  const f = analyze(liveBuf)
+  const moving = f && f.cad >= 70 && f.p >= 0.5
+  const sp = moving ? speedFromCadence(f.cad) : 0
+  const v = classify(f, sp)
+  live.verdict = v.txt
+  live.verdictCls = v.cls || ''
+  live.cad = moving ? Math.round(f.cad) : 0
+  live.speed = sp
+  if (v.ok) {
+    live.km += (sp / 3600) * DT
+    live.sec += DT
+    if (Math.floor(live.km) > segments.value.length) onLiveKm() // 真实里程跨 1 公里
+  }
+}
+
+// 真实模式：实际跑完 1 公里 → 用真实用时记一段并播报
+function onLiveKm() {
+  const segSec = Math.round(live.sec - segStartSec)
+  segStartSec = live.sec
+  const deltaSec = segSec - activeGoal.value.sec
+  const mood = deltaSec <= -4 ? 'ahead' : deltaSec >= 4 ? 'behind' : 'onpace'
+  segments.value.push({ sec: segSec, delta: deltaSec, mood })
+  const n = segments.value.length
+  const isFinal = n >= goalKm.value
+  const isHalf = !isFinal && goalKm.value >= 4 && n === Math.ceil(goalKm.value / 2)
+  const diffTxt = deltaSec === 0 ? '与目标持平' : `${deltaSec < 0 ? '快' : '慢'} ${Math.abs(deltaSec)} 秒`
+  const data = trainData()
+  pushFeed(
+    `📡 真实数据 · 第 ${n} 公里${isFinal ? '（最后一公里）' : ''} · ${fmtPace(segSec)}/公里，${diffTxt}。${lineOf(activeChar.value, isFinal ? 'final' : mood, data)}`,
+    mood
+  )
+  if (isHalf) pushFeed(lineOf(activeChar.value, 'half', data), 'onpace')
+  if (isFinal) {
+    stopLive()
+    finishReport('live')
+  }
+}
+
+function stopLive() {
+  live.on = false
+  if (liveTimer) { clearInterval(liveTimer); liveTimer = null }
+  if (liveDetach) { liveDetach(); liveDetach = null }
+  if (mode.value === 'live') live.verdict = '已停止'
+}
+
+// 完赛报告（模拟/真实共用，标注数据来源）并自动存档
+function finishReport(src) {
+  const steady = Math.round((steadyCount.value / goalKm.value) * 100)
+  const gap = planGap.value
+  const gapTxt = gap === 0 ? '与计划持平' : `${gap < 0 ? '快' : '慢'}于计划 ${Math.abs(Math.round(gap))} 秒`
+  const data = trainData()
+  const tail = lineOf(activeChar.value, 'finish', { ...data, steady, best: bestPace.value, worst: worstPace.value })
+  pushFeed(
+    `🏁 完赛！${goalKm.value} 公里总用时 ${fmtDur(totalDur.value)}（计划 ${planDurText.value}，${gapTxt}），平均配速 ${avgPace.value}/公里，最快 ${bestPace.value}、最慢 ${worstPace.value}，配速稳定率 ${steady}%，${achieved.value ? '平均配速达标' : '未达目标配速'}。${src === 'live' ? '（数据来源：本机传感器）' : ''}${tail}`,
+    'start'
+  )
+  saveRecord(src)
+}
+
+// ================= 训练记录（本地存档 + 角色复盘） =================
+const RECORD_KEY = 'ai-pacer-records-v1'
+const records = ref(loadRecords())
+function loadRecords() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(RECORD_KEY) || '[]')
+    return Array.isArray(raw) ? raw : []
+  } catch { return [] }
+}
+function saveRecord(src) {
+  records.value.unshift({
+    id: Date.now(), src,
+    date: new Date().toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    km: goalKm.value, goal: activeGoal.value.label,
+    dur: totalDur.value, avg: avgPace.value,
+    steady: Math.round((steadyCount.value / goalKm.value) * 100),
+    achieved: achieved.value, best: bestPace.value, worst: worstPace.value,
+    char: activeChar.value.name
+  })
+  records.value = records.value.slice(0, 5) // 只留最近 5 次
+  localStorage.setItem(RECORD_KEY, JSON.stringify(records.value))
+}
+function removeRecord(id) {
+  records.value = records.value.filter((x) => x.id !== id)
+  localStorage.setItem(RECORD_KEY, JSON.stringify(records.value))
+}
+
+// 让当前角色复盘一条历史记录：给数据结论 + 对比上一次 + 风格收尾
+function reviewRecord(r) {
+  const idx = records.value.findIndex((x) => x.id === r.id)
+  const prev = records.value[idx + 1]
+  const diff = prev ? r.dur - prev.dur : null
+  const compareTxt = diff === null
+    ? '这是你的第一条存档记录'
+    : diff === 0
+      ? '与上一次总用时持平'
+      : `对比 ${prev.date} 那次${diff < 0 ? '快' : '慢'}了 ${fmtDur(Math.abs(diff))}`
+  const mood = r.achieved ? 'onpace' : 'behind'
+  pushUser(`帮我复盘 ${r.date} 的 ${r.km} 公里`)
+  pushFeed(
+    `📋 复盘 ${r.date}（${r.src === 'live' ? '真实数据' : '模拟数据'}）：${r.km} 公里用时 ${fmtDur(r.dur)}，平均 ${r.avg}/公里（目标 ${r.goal}），稳定率 ${r.steady}%，最快 ${r.best}、最慢 ${r.worst}。${compareTxt}。${lineOf(activeChar.value, mood, trainData())}`,
+    mood
+  )
 }
 
 // 初始化第一条播报
@@ -467,6 +601,16 @@ pushFeed(lineOf(allChars.value[0], 'start'), 'start')
       </div>
     </div>
 
+    <!-- 数据来源：模拟演示 / 连接真实跑步数据 -->
+    <div class="section-head"><h2>数据来源</h2></div>
+    <div class="mode-switch">
+      <button type="button" :class="{ active: mode === 'sim' }" @click="switchMode('sim')">🎮 模拟演示</button>
+      <button type="button" :class="{ active: mode === 'live' }" @click="switchMode('live')">📡 真实传感器</button>
+    </div>
+    <p v-if="mode === 'live'" class="mode-tip">
+      将读取本机加速度传感器估算步频与里程，判定为真实跑步才累计，数据只留在本机{{ securePage ? '' : '（需 HTTPS 或 localhost 环境）' }}。
+    </p>
+
     <!-- 目标距离 -->
     <div class="section-head"><h2>目标距离</h2></div>
     <div class="chips">
@@ -544,6 +688,22 @@ pushFeed(lineOf(allChars.value[0], 'start'), 'start')
       <div class="km-progress-fill" :style="{ width: Math.min(100, (totalKm / goalKm) * 100) + '%' }"></div>
     </div>
 
+    <!-- 真实传感器面板 -->
+    <section v-if="mode === 'live'" class="live-panel">
+      <div class="live-grid">
+        <div><strong>{{ live.cad }}</strong><span>步频 spm</span></div>
+        <div><strong>{{ live.speed.toFixed(1) }}</strong><span>速度 km/h</span></div>
+        <div><strong>{{ live.km.toFixed(2) }}</strong><span>真实里程 km</span></div>
+      </div>
+      <div class="live-verdict" :class="live.verdictCls">{{ live.verdict }}</div>
+      <p v-if="live.state === 'denied'" class="live-warn">未获得传感器权限：iPhone 请用 Safari 打开本页并允许「动作与方向访问」。</p>
+      <p v-else-if="live.state === 'nodata'" class="live-warn">3 秒未读到传感器数据：本机可能没有运动传感器（如电脑），请用手机打开，或切回「模拟演示」。</p>
+      <button v-if="!live.on" class="live-btn" :disabled="finished" @click="startLive">
+        {{ totalKm > 0 ? '▶ 继续真实跑步' : '📡 开始真实陪跑' }}
+      </button>
+      <button v-else class="live-btn stop" @click="stopLive">⏸ 暂停陪跑</button>
+    </section>
+
     <!-- 完赛摘要横幅 -->
     <div v-if="finished" class="finish-banner" :class="{ ok: achieved }">
       <div class="finish-icon">{{ achieved ? '🏆' : '📋' }}</div>
@@ -603,21 +763,40 @@ pushFeed(lineOf(allChars.value[0], 'start'), 'start')
 
     <!-- 操作 -->
     <div class="actions">
-      <button class="go-btn" :disabled="finished" @click="runSegment">
+      <button v-if="mode === 'sim'" class="go-btn" :disabled="finished" @click="runSegment">
         {{ finished ? '✅ 本次训练已完成' : `🏃 模拟跑完第 ${totalKm + 1} 公里（${totalKm}/${goalKm}）` }}
       </button>
-      <button class="ghost-btn" @click="reset">重置</button>
+      <button class="ghost-btn" :class="{ wide: mode === 'live' }" @click="reset">重置</button>
     </div>
     <label class="voice-toggle">
       <input type="checkbox" v-model="voiceOn" />
       <span>🔊 开启语音朗读（浏览器内置语音，无需联网）</span>
     </label>
 
+    <!-- 训练记录：每次完赛自动存档，可让当前角色复盘 -->
+    <div class="section-head">
+      <h2>训练记录</h2>
+      <span class="rec-count">{{ records.length }} 条 · 仅存本机</span>
+    </div>
+    <div v-if="records.length" class="record-list">
+      <div v-for="r in records" :key="r.id" class="record-card">
+        <div class="record-main">
+          <strong>{{ r.km }} 公里 · {{ fmtDur(r.dur) }}</strong>
+          <span>{{ r.date }} · 平均 {{ r.avg }}/km（目标 {{ r.goal }}）· {{ r.src === 'live' ? '📡 真实' : '🎮 模拟' }}</span>
+        </div>
+        <div class="record-side">
+          <button type="button" class="review-btn" @click="reviewRecord(r)">让{{ activeChar.name }}复盘</button>
+          <button type="button" class="rec-del" title="删除该记录" @click="removeRecord(r.id)">×</button>
+        </div>
+      </div>
+    </div>
+    <p v-else class="record-empty">完成一次训练后自动存档在这里，可随时让陪跑角色复盘。</p>
+
     <!-- 设计依据 -->
     <details class="design">
       <summary>设计依据</summary>
       <p>即时、个性化的反馈能提升运动坚持度。播报全部来自本地预设台词包，不接入大模型接口——既避免 API 费用和密钥暴露，也保证没有网络时依然能播报。</p>
-      <p class="disclaimer">＊配速数据为点击模拟生成，非真实传感器记录。</p>
+      <p class="disclaimer">＊模拟模式为点击生成；真实模式读取本机加速度传感器估算，判定为真实跑步才累计里程，所有数据仅存本机、不上传。</p>
     </details>
   </div>
 </template>
@@ -837,4 +1016,58 @@ pushFeed(lineOf(allChars.value[0], 'start'), 'start')
 .design summary { cursor: pointer; color: var(--color-accent); font-size: 14px; font-weight: 600; }
 .design p { line-height: 1.7; margin: 10px 0 0; }
 .disclaimer { color: var(--color-text-light); font-size: 12px; }
+
+/* 数据来源切换 */
+.mode-switch { display: flex; gap: 8px; }
+.mode-switch button {
+  flex: 1; border: 2px solid var(--color-border); background: var(--color-white);
+  border-radius: var(--radius); padding: 11px 6px; font-size: 13.5px; font-weight: 600;
+  color: var(--color-text); cursor: pointer;
+}
+.mode-switch button.active { border-color: var(--color-primary); background: var(--color-primary-light); color: var(--color-primary-dark); }
+.mode-tip { margin: 8px 2px 0; font-size: 12px; line-height: 1.6; color: var(--color-text-light); }
+
+/* 真实传感器面板 */
+.live-panel {
+  margin-top: 14px; background: var(--color-white); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 14px;
+}
+.live-grid { display: flex; gap: 10px; }
+.live-grid div { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.live-grid strong { font-size: 20px; color: var(--color-primary-dark); font-variant-numeric: tabular-nums; }
+.live-grid span { font-size: 11px; color: var(--color-text-light); }
+.live-verdict { margin-top: 10px; text-align: center; font-size: 13px; font-weight: 700; color: var(--color-text); }
+.live-verdict.ok { color: var(--color-primary-dark); }
+.live-verdict.bad { color: #c2410c; }
+.live-warn { margin: 10px 0 0; font-size: 12px; line-height: 1.6; color: #c2410c; background: #fef3ec; border-radius: 10px; padding: 8px 10px; }
+.live-btn {
+  margin-top: 12px; width: 100%; border: none; border-radius: 14px; height: 46px;
+  background: linear-gradient(135deg, #14c8ae, var(--color-primary-dark));
+  color: #fff; font-size: 14.5px; font-weight: 700; cursor: pointer;
+}
+.live-btn:disabled { background: #a7c4bf; cursor: default; }
+.live-btn.stop { background: var(--color-white); color: var(--color-text); border: 1px solid var(--color-border); }
+.ghost-btn.wide { width: 100%; height: 50px; }
+
+/* 训练记录 */
+.rec-count { font-size: 12px; color: var(--color-text-light); }
+.record-list { display: flex; flex-direction: column; gap: 10px; }
+.record-card {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--color-white); border: 1px solid var(--color-border);
+  border-radius: var(--radius); box-shadow: var(--shadow); padding: 12px 14px;
+}
+.record-main { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.record-main strong { font-size: 14px; color: var(--color-text); font-variant-numeric: tabular-nums; }
+.record-main span { font-size: 11.5px; color: var(--color-text-light); font-variant-numeric: tabular-nums; }
+.record-side { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.review-btn {
+  border: none; border-radius: 999px; padding: 7px 12px;
+  background: var(--color-primary); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.rec-del {
+  width: 24px; height: 24px; border: none; border-radius: 50%;
+  background: var(--color-border); color: var(--color-text-light); font-size: 14px; cursor: pointer;
+}
+.record-empty { font-size: 12.5px; color: var(--color-text-light); text-align: center; background: var(--color-white); border: 1px dashed var(--color-border); border-radius: var(--radius); padding: 16px; }
 </style>
