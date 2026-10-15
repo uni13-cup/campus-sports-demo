@@ -3,6 +3,7 @@ import path from 'node:path'
 import { chromium } from 'playwright-core'
 
 const url = process.argv[2] ?? 'http://127.0.0.1:4173/campus-sports-demo/game/play'
+const lobbyUrl = url.replace(/\/game\/play$/, '/game')
 const appOrigin = new URL(url).origin
 const chromePath = process.env.CHROME_PATH ??
   'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
@@ -36,7 +37,20 @@ try {
     }
   })
 
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+  await page.goto(lobbyUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 })
+  await page.locator('.role-card.mouse').click()
+  const mouseSelection = await page.locator('.role-card.mouse').getAttribute('aria-pressed')
+  await page.locator('.role-card.cat').click()
+  const lobby = await page.evaluate(() => ({
+    title: document.title,
+    roles: document.querySelectorAll('.role-card').length,
+    room: document.querySelector('.room-card strong')?.textContent.trim(),
+    campus: document.querySelector('.scene-meta')?.textContent.includes('河南财经政法大学郑东校区'),
+    demoNotice: document.querySelector('.notice')?.textContent.includes('不是真实 GPS')
+  }))
+  await page.screenshot({ path: path.join(artifactsDir, 'lobby.png') })
+  await page.locator('.start-button').click()
+  await page.waitForURL(/\/game\/play$/)
   try {
     await page.waitForFunction(
       () => document.querySelectorAll('.campus-role-marker').length === 6,
@@ -162,6 +176,7 @@ try {
 
   const report = {
     url,
+    lobby: { ...lobby, mouseSelection },
     initial,
     interaction,
     localScene,
@@ -178,6 +193,10 @@ try {
   console.log(JSON.stringify(report, null, 2))
 
   if (movement.screenDistance < 2) throw new Error('Continuous keyboard movement was not visible')
+  if (lobby.roles !== 2 || lobby.room !== 'DEMO-ZD-01' || !lobby.campus ||
+      !lobby.demoNotice || mouseSelection !== 'true') {
+    throw new Error('Game lobby verification failed')
+  }
   if (runtimeErrors.length > 0) {
     throw new Error(`Browser runtime errors: ${runtimeErrors.join('; ')}`)
   }

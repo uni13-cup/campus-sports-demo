@@ -1,5 +1,13 @@
 {
   "url": "http://127.0.0.1:4173/campus-sports-demo/game/play",
+  "lobby": {
+    "title": "猫鼠大作战 · 游戏大厅 | 校园运动平台",
+    "roles": 2,
+    "room": "DEMO-ZD-01",
+    "campus": true,
+    "demoNotice": true,
+    "mouseSelection": "true"
+  },
   "initial": {
     "title": "猫鼠大作战 · 对战 | 校园运动平台",
     "canvas": {
@@ -61,13 +69,13 @@
         "collision-debug"
       ],
       "center": [
-        113.81510746552294,
+        113.81474220395648,
         34.78577501146093
       ],
       "zoom": 17.386596281067742,
       "pitch": 38.00000000000001,
-      "campusFeatures": 204,
-      "activityFeatures": 10
+      "campusFeatures": 192,
+      "activityFeatures": 9
     },
     "mapErrors": []
   },

@@ -22,7 +22,7 @@ const events = ref([
     place: '东校区操场',
     desc: '真人版猫追鼠，跑起来才不会被抓',
     action: '立即开玩',
-    path: '/game/play'
+    path: '/game'
   },
   {
     id: 'runmonth',

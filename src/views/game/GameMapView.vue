@@ -13,6 +13,7 @@ import {
 import { updateNavigatingAi } from '@/game/navigation.js'
 import { updateCaptureFlow } from '@/game/capture.js'
 import { saveGameResult } from '@/game/result-store.js'
+import { loadGameSession } from '@/game/game-session.js'
 import CampusMap from './components/CampusMap.vue'
 
 const router = useRouter()
@@ -122,7 +123,8 @@ function checkEnd() {
 }
 
 function startMatch() {
-  state.value = initGame({ aiSeed: Date.now() })
+  const session = loadGameSession()
+  state.value = initGame({ aiSeed: Date.now(), humanRole: session.humanRole })
   ending.value = false
   accumulatedTime = 0
   lastFrameTime = null
@@ -134,7 +136,7 @@ function startSimulation() {
 }
 
 function backToLobby() {
-  router.push('/play')
+  router.push('/game')
 }
 
 function onKeyDown(event) {

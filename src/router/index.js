@@ -40,7 +40,13 @@ const routes = [
     component: () => import('@/views/home/HomeView.vue'),
     meta: { title: '校园运动平台' }
   },
-  // —— 校园猫鼠大作战 v2（仅保留对战页，入口在趣味玩法） ——
+  // —— 校园猫鼠大作战 v3（独立大厅与对战页） ——
+  {
+    path: '/game',
+    name: 'game-lobby',
+    component: () => import('@/views/game/GameLobbyView.vue'),
+    meta: { title: '猫鼠大作战 · 游戏大厅' }
+  },
   {
     path: '/game/play',
     name: 'game-play',
