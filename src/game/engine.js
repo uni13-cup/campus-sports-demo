@@ -40,6 +40,7 @@ export function initGame(opts = {}) {
     chasingTimeLeft: cfg.chasingDuration,
     winner: null,
     endReason: null,
+    captureContactMouseIds: [],
     config: {
       mapWidth: cfg.mapWidth,
       mapHeight: cfg.mapHeight,
@@ -172,8 +173,9 @@ export function isWalkablePosition(position, config = GAME_CONFIG) {
 }
 
 /**
- * 检查全部现有猫与存活鼠之间的距离，并将被抓的鼠转为电脑猫。
- * 本次检查中新转化的猫从下一次更新开始参与抓捕，避免同一帧连锁抓捕。
+ * 检查玩家猫与存活鼠之间的实时距离，并将最近且新进入范围的鼠转为电脑猫。
+ * 同一次空间接触只转换一只；其他已在范围内的鼠必须离开后重新进入才可被抓，
+ * 同时禁止新转化的电脑猫触发自动连锁抓捕。
  * @param {GameState} gameState
  * @returns {{state: GameState, captures: Array<Object>}}
  */
@@ -182,21 +184,27 @@ export function checkCaptures(gameState) {
   const captures = []
   if (nextState.phase !== 'chasing') return { state: nextState, captures }
 
-  const cats = nextState.players.filter((player) => player.role === 'cat')
+  const cats = nextState.players.filter(
+    (player) => player.role === 'cat' && player.controller === 'human'
+  )
   const mice = nextState.players.filter((player) => player.role === 'mouse')
 
-  for (const mouse of mice) {
-    const catcher = cats
-      .map((cat) => ({
-        cat,
-        distance: calcDistance(cat.position, mouse.position)
-      }))
-      .filter(({ distance }) => distance <= nextState.config.catchThreshold)
-      .sort((left, right) => left.distance - right.distance)[0]
+  const candidates = cats
+    .flatMap((cat) => mice.map((mouse) => ({
+      cat,
+      mouse,
+      distance: calcDistance(cat.position, mouse.position)
+    })))
+    .filter(({ distance }) => distance <= nextState.config.catchThreshold)
+    .sort((left, right) => left.distance - right.distance)
+  const previousContacts = new Set(nextState.captureContactMouseIds ?? [])
+  nextState.captureContactMouseIds = [...new Set(
+    candidates.map(({ mouse }) => mouse.id)
+  )]
+  const catcher = candidates.find(({ mouse }) => !previousContacts.has(mouse.id))
 
-    if (!catcher) continue
-
-    const mutableMouse = nextState.players.find((player) => player.id === mouse.id)
+  if (catcher) {
+    const mutableMouse = nextState.players.find((player) => player.id === catcher.mouse.id)
     const mutableCat = nextState.players.find(
       (player) => player.id === catcher.cat.id
     )

@@ -176,6 +176,46 @@ test('checkCaptures does not capture a mouse outside the threshold', () => {
   assert.equal(result.state.phase, 'chasing')
 })
 
+test('checkCaptures lets one cat capture only the nearest mouse per check', () => {
+  const initial = initGame({ obstacles: [] })
+  initial.phase = 'chasing'
+  initial.players[1].position = { x: 190, y: 260 }
+  initial.players[2].position = { x: 200, y: 260 }
+
+  const result = checkCaptures(initial)
+  assert.equal(result.captures.length, 1)
+  assert.equal(result.state.players[1].role, 'cat')
+  assert.equal(result.state.players[2].role, 'mouse')
+})
+
+test('checkCaptures does not chain-capture mice already in the same contact range', () => {
+  const initial = initGame({ obstacles: [] })
+  initial.phase = 'chasing'
+  initial.players[1].position = { x: 190, y: 260 }
+  initial.players[2].position = { x: 200, y: 260 }
+
+  const first = checkCaptures(initial)
+  const second = checkCaptures(first.state)
+
+  assert.equal(first.captures.length, 1)
+  assert.equal(second.captures.length, 0)
+  assert.equal(second.state.players[2].role, 'mouse')
+})
+
+test('converted computer cats cannot automatically capture another mouse', () => {
+  const initial = initGame({ obstacles: [] })
+  initial.phase = 'chasing'
+  initial.players[0].position = { x: 0, y: 0 }
+  initial.players[1].role = 'cat'
+  initial.players[1].controller = 'ai'
+  initial.players[2].position = { ...initial.players[1].position }
+
+  const result = checkCaptures(initial)
+
+  assert.equal(result.captures.length, 0)
+  assert.equal(result.state.players[2].role, 'mouse')
+})
+
 test('checkCaptures is disabled during the hiding phase', () => {
   const initial = { ...createCaptureState(5), phase: 'hiding' }
   const result = checkCaptures(initial)
