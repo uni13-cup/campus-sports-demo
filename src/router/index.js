@@ -53,6 +53,12 @@ const routes = [
     component: () => import('@/views/game/GameMapView.vue'),
     meta: { title: '猫鼠大作战 · 对战' }
   },
+  {
+    path: '/game/result',
+    name: 'game-result',
+    component: () => import('@/views/game/GameResultView.vue'),
+    meta: { title: '猫鼠大作战 · 结算' }
+  },
   // —— 四个轻量功能展示页 ——
   {
     path: '/features/sports-wall',

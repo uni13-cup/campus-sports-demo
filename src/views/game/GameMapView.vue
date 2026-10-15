@@ -22,6 +22,8 @@ const ending = ref(false)
 const touchInput = ref({ x: 0, y: 0 })
 const muted = ref(false)
 const feedback = ref('')
+const phaseCue = ref('')
+const conversionBurst = ref(false)
 const hudExpanded = ref(true)
 const pressedKeys = new Set()
 let animationFrameId = null
@@ -29,6 +31,8 @@ let simulationStarted = false
 let lastFrameTime = null
 let accumulatedTime = 0
 let feedbackTimer = null
+let phaseCueTimer = null
+let conversionTimer = null
 let audioContext = null
 
 const phase = computed(() => state.value?.phase ?? 'hiding')
@@ -125,7 +129,7 @@ function checkEnd() {
   saveGameResult(state.value)
   showFeedback(state.value.winner === 'cat' ? '全部老鼠已抓获！' : '追捕时间结束')
   playFeedback('end')
-  window.setTimeout(() => router.push('/play'), 900)
+  window.setTimeout(() => router.push('/game/result'), 1100)
 }
 
 function startMatch() {
@@ -173,6 +177,12 @@ function showFeedback(message) {
   feedbackTimer = window.setTimeout(() => { feedback.value = '' }, 1800)
 }
 
+function showPhaseCue(message) {
+  phaseCue.value = message
+  if (phaseCueTimer) window.clearTimeout(phaseCueTimer)
+  phaseCueTimer = window.setTimeout(() => { phaseCue.value = '' }, 1300)
+}
+
 function unlockAudio() {
   if (muted.value || audioContext) return
   const AudioContextClass = window.AudioContext || window.webkitAudioContext
@@ -183,17 +193,26 @@ function unlockAudio() {
 
 function playFeedback(type) {
   if (muted.value || !audioContext) return
-  const oscillator = audioContext.createOscillator()
-  const gain = audioContext.createGain()
-  const frequencies = { capture: 760, candidate: 590, chase: 480, danger: 330, end: 420 }
-  oscillator.type = type === 'danger' ? 'triangle' : 'sine'
-  oscillator.frequency.value = frequencies[type] ?? 420
-  gain.gain.setValueAtTime(0.0001, audioContext.currentTime)
-  gain.gain.exponentialRampToValueAtTime(0.08, audioContext.currentTime + 0.02)
-  gain.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.22)
-  oscillator.connect(gain).connect(audioContext.destination)
-  oscillator.start()
-  oscillator.stop(audioContext.currentTime + 0.24)
+  const sequences = {
+    capture: [720, 960],
+    chase: [460, 620],
+    danger: [330],
+    end: [520, 700, 900]
+  }
+  const startAt = audioContext.currentTime
+  for (const [index, frequency] of (sequences[type] ?? [420]).entries()) {
+    const oscillator = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+    const toneStart = startAt + index * 0.085
+    oscillator.type = type === 'danger' ? 'triangle' : 'sine'
+    oscillator.frequency.value = frequency
+    gain.gain.setValueAtTime(0.0001, toneStart)
+    gain.gain.exponentialRampToValueAtTime(0.065, toneStart + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + 0.16)
+    oscillator.connect(gain).connect(audioContext.destination)
+    oscillator.start(toneStart)
+    oscillator.stop(toneStart + 0.18)
+  }
 }
 
 function toggleMute() {
@@ -232,6 +251,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointercancel', releaseDirection)
   document.removeEventListener('visibilitychange', onVisibilityChange)
   if (feedbackTimer) window.clearTimeout(feedbackTimer)
+  if (phaseCueTimer) window.clearTimeout(phaseCueTimer)
+  if (conversionTimer) window.clearTimeout(conversionTimer)
   audioContext?.close?.()
 })
 
@@ -243,6 +264,9 @@ watch(() => state.value?.eventSequence ?? 0, (current, previous = 0) => {
       event.type === 'role-converted' && event.playerId === humanId
     )
     showFeedback(humanConverted ? '你被抓到了，已转换为猫阵营！' : '抓捕成功，老鼠已加入猫阵营')
+    conversionBurst.value = true
+    if (conversionTimer) window.clearTimeout(conversionTimer)
+    conversionTimer = window.setTimeout(() => { conversionBurst.value = false }, 700)
     playFeedback('capture')
   }
 })
@@ -252,13 +276,16 @@ watch(phase, (current, previous) => {
     showFeedback(humanPlayer.value?.role === 'mouse'
       ? '追捕开始 · 躲开 AI 猫'
       : '追捕开始 · 自由选择附近老鼠')
+    showPhaseCue('追捕开始')
     playFeedback('chase')
   }
 })
 
 watch(threatLevel, (current, previous) => {
   if (current === 'danger' && previous !== 'danger') {
-    showFeedback(`老鼠接近 · 进入 ${state.value?.config.catchThreshold ?? 80}m 自动抓捕`)
+    showFeedback(humanPlayer.value?.role === 'mouse'
+      ? `危险 · AI 猫已进入 ${state.value?.config.catchThreshold ?? 80}m 抓捕范围`
+      : `老鼠接近 · 进入 ${state.value?.config.catchThreshold ?? 80}m 自动抓捕`)
     playFeedback('danger')
   }
 })
@@ -280,7 +307,7 @@ watch(threatLevel, (current, previous) => {
     </header>
 
     <section class="game-stage">
-      <div class="map-panel">
+      <div class="map-panel" :class="{ 'capture-flash': conversionBurst }">
         <CampusMap
           :players="players"
           :config="state.config"
@@ -344,6 +371,12 @@ watch(threatLevel, (current, previous) => {
         </section>
 
         <div v-if="feedback" class="game-feedback" role="status">{{ feedback }}</div>
+        <Transition name="phase-cue">
+          <div v-if="phaseCue" class="phase-transition" role="status">
+            <span>GAME PHASE</span>
+            <strong>{{ phaseCue }}</strong>
+          </div>
+        </Transition>
         <div v-if="phase === 'ended'" class="end-overlay">
           <strong>{{ state.winner === 'cat' ? '猫方获胜' : '鼠方获胜' }}</strong>
           <span>正在生成赛事结算</span>
@@ -476,6 +509,39 @@ watch(threatLevel, (current, previous) => {
   font-weight: 750;
   box-shadow: 0 8px 22px rgba(15, 48, 35, 0.22);
 }
+.phase-transition {
+  position: absolute;
+  z-index: 8;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  min-width: 220px;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 18px 28px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(255,255,255,.5);
+  border-radius: 18px;
+  background: rgba(12, 48, 35, .9);
+  color: #fff;
+  box-shadow: 0 22px 60px rgba(5,28,19,.28);
+  backdrop-filter: blur(12px);
+}
+.phase-transition span { color: #64e4ad; font-size: 8px; font-weight: 900; letter-spacing: .18em; }
+.phase-transition strong { font-size: 22px; }
+.phase-cue-enter-active, .phase-cue-leave-active { transition: opacity .22s ease, transform .22s ease; }
+.phase-cue-enter-from, .phase-cue-leave-to { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.96); }
+.map-panel.capture-flash::after {
+  content: '';
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  border: 5px solid rgba(255, 202, 65, .72);
+  border-radius: inherit;
+  animation: capture-flash .68s ease-out both;
+}
 .sound-toggle {
   margin-top: 10px;
   padding: 6px 9px;
@@ -502,6 +568,7 @@ watch(threatLevel, (current, previous) => {
 .end-overlay span { margin-top: 5px; font-size: 11px; opacity: 0.8; }
 
 @keyframes pulse { to { transform: scale(1.035); box-shadow: 0 7px 25px rgba(203, 58, 42, 0.2); } }
+@keyframes capture-flash { from { opacity: 1; box-shadow: inset 0 0 70px rgba(255,188,42,.35); } to { opacity: 0; } }
 
 @media (max-width: 960px) {
   .game-stage { grid-template-columns: 1fr; }
@@ -674,6 +741,6 @@ watch(threatLevel, (current, previous) => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .match-hud, .target-card, .phase-timer { transition: none; animation: none; }
+  .match-hud, .target-card, .phase-timer, .map-panel.capture-flash::after { transition: none; animation: none; }
 }
 </style>

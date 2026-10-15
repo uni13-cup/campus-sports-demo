@@ -163,6 +163,7 @@ try {
     null,
     { timeout: 10_000 }
   )
+  const chaseCueVisible = await page.locator('.phase-transition').isVisible()
   const playerMarker = page.locator('.campus-role-marker.is-human')
   const beforeMove = await playerMarker.boundingBox()
   await page.keyboard.down('ArrowRight')
@@ -202,6 +203,49 @@ try {
   }))
   await page.screenshot({ path: path.join(artifactsDir, 'mobile-map.png') })
 
+  await context.setOffline(false)
+  await page.setViewportSize({ width: 1000, height: 820 })
+  await page.evaluate(() => {
+    sessionStorage.setItem('campus-catmouse-result-v2', JSON.stringify({
+      version: 3,
+      savedAt: Date.now(),
+      expiresAt: Date.now() + 3600000,
+      phase: 'ended',
+      winner: 'cat',
+      endReason: 'all-mice-caught',
+      initialHumanRole: 'mouse',
+      hidingTimeLeft: 0,
+      chasingTimeLeft: 8,
+      events: [{
+        id: 1,
+        type: 'capture-confirmed',
+        catId: 'cat-1',
+        mouseId: 'mouse-1',
+        distance: 12.5
+      }],
+      players: [
+        { id: 'cat-1', role: 'cat', controller: 'ai', captures: 5 },
+        { id: 'mouse-1', role: 'cat', controller: 'human', captures: 1 },
+        { id: 'mouse-2', role: 'cat', controller: 'ai', captures: 0 },
+        { id: 'mouse-3', role: 'cat', controller: 'ai', captures: 0 },
+        { id: 'mouse-4', role: 'cat', controller: 'ai', captures: 0 },
+        { id: 'mouse-5', role: 'cat', controller: 'ai', captures: 0 }
+      ]
+    }))
+  })
+  await page.goto(url.replace('/game/play', '/game/result'), {
+    waitUntil: 'domcontentloaded',
+    timeout: 20_000
+  })
+  await page.locator('.result-card').waitFor()
+  const resultPage = await page.evaluate(() => ({
+    title: document.querySelector('.result-card h1')?.textContent.trim(),
+    conversion: document.querySelector('.conversion-note')?.textContent.trim(),
+    actions: document.querySelectorAll('.result-actions button').length,
+    disclaimer: document.querySelector('.result-disclaimer')?.textContent.includes('不代表真实 GPS')
+  }))
+  await page.screenshot({ path: path.join(artifactsDir, 'result-page.png') })
+
   const report = {
     url,
     lobby: { ...lobby, mouseSelection },
@@ -210,8 +254,10 @@ try {
     interaction,
     localScene,
     movement,
+    chaseCueVisible,
     offline,
     mobile,
+    resultPage,
     externalRequests: [...new Set(externalRequests)],
     runtimeErrors
   }
@@ -222,6 +268,7 @@ try {
   console.log(JSON.stringify(report, null, 2))
 
   if (movement.screenDistance < 2) throw new Error('Continuous keyboard movement was not visible')
+  if (!chaseCueVisible) throw new Error('Chasing phase transition feedback was not visible')
   if (lobby.roles !== 2 || lobby.room !== 'DEMO-ZD-01' || !lobby.campus ||
       !lobby.demoNotice || mouseSelection !== 'true') {
     throw new Error('Game lobby verification failed')
@@ -239,6 +286,10 @@ try {
   }
   if (mobile.mapHeight < 400 || !mobile.dpadVisible || mobile.horizontalOverflow) {
     throw new Error('Mobile layout verification failed')
+  }
+  if (!resultPage.title?.includes('猫阵营') || !resultPage.conversion ||
+      resultPage.actions !== 2 || !resultPage.disclaimer) {
+    throw new Error('Result page verification failed')
   }
   if (externalRequests.length > 0) {
     throw new Error(`Unexpected runtime network requests: ${externalRequests.join('; ')}`)

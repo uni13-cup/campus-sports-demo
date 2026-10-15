@@ -217,15 +217,22 @@ function markerElement(player) {
 }
 
 function applyMarkerAppearance(element, player) {
-  const converted = player.role === 'cat' && player.controller === 'ai'
+  const previousRole = element.dataset.role
+  const converted = player.role === 'cat' && player.capturedAt !== null && player.capturedAt !== undefined
   const isCandidate = props.captureCandidate?.mouseId === player.id
+  if (previousRole === 'mouse' && player.role === 'cat') {
+    element.dataset.convertingUntil = String(Date.now() + 900)
+  }
+  const conversionActive = Number(element.dataset.convertingUntil ?? 0) > Date.now()
   element.className = [
     'campus-role-marker',
     `is-${player.role}`,
     player.controller === 'human' ? 'is-human' : 'is-ai',
     converted ? 'is-converted' : '',
-    isCandidate ? 'is-candidate' : ''
+    isCandidate ? 'is-candidate' : '',
+    conversionActive ? 'just-converted' : ''
   ].filter(Boolean).join(' ')
+  element.dataset.role = player.role
   element.querySelector('.marker-face').textContent = player.role === 'cat' ? '🐱' : '🐭'
   element.querySelector('.marker-label').textContent =
     player.controller === 'human'
@@ -583,6 +590,8 @@ onBeforeUnmount(() => {
 .campus-role-marker.is-human .marker-ring { border-color: rgba(255, 77, 56, 0.5); opacity: 1; animation: marker-pulse 1.6s ease-out infinite; }
 .campus-role-marker.is-converted { background: #ab8cf3; }
 .campus-role-marker.is-converted .marker-direction { color: #6848bb; }
+.campus-role-marker.just-converted { z-index: 7; animation: role-convert .85s cubic-bezier(.18,.8,.24,1); }
+.campus-role-marker.just-converted .marker-ring { border-color: #ffd559; opacity: 1; animation: conversion-ring .85s ease-out; }
 .campus-role-marker.is-candidate { background: #ff7c62; }
 .campus-role-marker.is-candidate .marker-face { transform: scale(1.12); }
 .campus-role-marker.is-candidate .marker-ring { border-color: #ff5a47; opacity: 1; animation: candidate-pulse 0.72s ease-out infinite; }
@@ -653,6 +662,15 @@ onBeforeUnmount(() => {
 @keyframes candidate-pulse {
   0% { transform: scale(0.92); opacity: 1; }
   100% { transform: scale(1.8); opacity: 0; }
+}
+@keyframes role-convert {
+  0% { transform: scale(.72) rotate(-18deg); }
+  55% { transform: scale(1.34) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes conversion-ring {
+  from { transform: scale(.7); opacity: 1; }
+  to { transform: scale(2.1); opacity: 0; }
 }
 @media (max-width: 700px) {
   .map-status { max-width: calc(100% - 70px); }

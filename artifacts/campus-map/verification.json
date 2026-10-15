@@ -13,7 +13,7 @@
     "aiCats": 1,
     "aiMice": 4,
     "phase": "躲藏",
-    "hidingMovement": 153.94205803362803
+    "hidingMovement": 205.46905560511536
   },
   "initial": {
     "title": "猫鼠大作战 · 对战 | 校园运动平台",
@@ -76,7 +76,7 @@
         "collision-debug"
       ],
       "center": [
-        113.8153437150263,
+        113.81522887803112,
         34.78577501146093
       ],
       "zoom": 17.386596281067742,
@@ -106,13 +106,14 @@
       "height": 47
     },
     "after": {
-      "x": 156.53125,
-      "y": 646.75,
+      "x": 148.53125,
+      "y": 645.75,
       "width": 47,
       "height": 47
     },
-    "screenDistance": 99.72462083156796
+    "screenDistance": 91.66242414424791
   },
+  "chaseCueVisible": true,
   "offline": {
     "canvas": true,
     "markers": 6,
@@ -128,6 +129,12 @@
     "hudHeight": 49,
     "hudDetailsVisible": false,
     "horizontalOverflow": false
+  },
+  "resultPage": {
+    "title": "猫阵营完成抓捕",
+    "conversion": "你在本局被抓后转换为玩家猫，并继续参加了比赛。",
+    "actions": 2,
+    "disclaimer": true
   },
   "externalRequests": [],
   "runtimeErrors": []
