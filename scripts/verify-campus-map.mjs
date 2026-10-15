@@ -40,6 +40,34 @@ try {
   await page.goto(lobbyUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 })
   await page.locator('.role-card.mouse').click()
   const mouseSelection = await page.locator('.role-card.mouse').getAttribute('aria-pressed')
+  await page.locator('.start-button').click()
+  await page.waitForURL(/\/game\/play$/)
+  await page.waitForFunction(
+    () => document.querySelectorAll('.campus-role-marker').length === 6,
+    null,
+    { timeout: 15_000 }
+  )
+  await page.getByRole('button', { name: '自由' }).click()
+  const humanMouseMarker = page.locator('.campus-role-marker.is-human')
+  const mouseBeforeMove = await humanMouseMarker.boundingBox()
+  const mouseModeInitial = await page.evaluate(() => ({
+    humanLabel: document.querySelector('.campus-role-marker.is-human')?.getAttribute('aria-label'),
+    aiCats: document.querySelectorAll('.campus-role-marker.is-cat.is-ai').length,
+    aiMice: document.querySelectorAll('.campus-role-marker.is-mouse.is-ai').length,
+    phase: document.querySelector('.phase-timer span')?.textContent.trim()
+  }))
+  await page.keyboard.down('ArrowRight')
+  await page.waitForTimeout(400)
+  await page.keyboard.up('ArrowRight')
+  const mouseAfterMove = await humanMouseMarker.boundingBox()
+  const mouseMode = {
+    ...mouseModeInitial,
+    hidingMovement: mouseBeforeMove && mouseAfterMove
+      ? Math.hypot(mouseAfterMove.x - mouseBeforeMove.x, mouseAfterMove.y - mouseBeforeMove.y)
+      : 0
+  }
+
+  await page.goto(lobbyUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 })
   await page.locator('.role-card.cat').click()
   const lobby = await page.evaluate(() => ({
     title: document.title,
@@ -177,6 +205,7 @@ try {
   const report = {
     url,
     lobby: { ...lobby, mouseSelection },
+    mouseMode,
     initial,
     interaction,
     localScene,
@@ -196,6 +225,11 @@ try {
   if (lobby.roles !== 2 || lobby.room !== 'DEMO-ZD-01' || !lobby.campus ||
       !lobby.demoNotice || mouseSelection !== 'true') {
     throw new Error('Game lobby verification failed')
+  }
+  if (mouseMode.humanLabel !== '玩家鼠' || mouseMode.aiCats !== 1 ||
+      mouseMode.aiMice !== 4 || mouseMode.phase !== '躲藏' ||
+      mouseMode.hidingMovement < 2) {
+    throw new Error(`Mouse mode verification failed: ${JSON.stringify(mouseMode)}`)
   }
   if (runtimeErrors.length > 0) {
     throw new Error(`Browser runtime errors: ${runtimeErrors.join('; ')}`)

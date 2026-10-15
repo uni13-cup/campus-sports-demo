@@ -8,6 +8,13 @@
     "demoNotice": true,
     "mouseSelection": "true"
   },
+  "mouseMode": {
+    "humanLabel": "玩家鼠",
+    "aiCats": 1,
+    "aiMice": 4,
+    "phase": "躲藏",
+    "hidingMovement": 153.94205803362803
+  },
   "initial": {
     "title": "猫鼠大作战 · 对战 | 校园运动平台",
     "canvas": {
@@ -51,7 +58,7 @@
     ],
     "mapDebug": {
       "loaded": false,
-      "styleLoaded": false,
+      "styleLoaded": true,
       "layers": [
         "offline-base",
         "campus-area",
@@ -69,13 +76,13 @@
         "collision-debug"
       ],
       "center": [
-        113.81474220395648,
+        113.8153437150263,
         34.78577501146093
       ],
       "zoom": 17.386596281067742,
       "pitch": 38.00000000000001,
-      "campusFeatures": 192,
-      "activityFeatures": 9
+      "campusFeatures": 204,
+      "activityFeatures": 10
     },
     "mapErrors": []
   },
@@ -99,12 +106,12 @@
       "height": 47
     },
     "after": {
-      "x": 177.53125,
-      "y": 649.75,
+      "x": 156.53125,
+      "y": 646.75,
       "width": 47,
       "height": 47
     },
-    "screenDistance": 120.93386622447824
+    "screenDistance": 99.72462083156796
   },
   "offline": {
     "canvas": true,

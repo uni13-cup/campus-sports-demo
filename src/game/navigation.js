@@ -148,6 +148,7 @@ export function updateNavigatingAi(
 
   const aiPlayers = nextState.players.filter((player) => player.controller === 'ai')
   for (const player of aiPlayers) {
+    if (nextState.phase === 'hiding' && player.role === 'cat') continue
     const nav = nextState.navigation[player.id] ?? {
       path: [],
       index: 0,

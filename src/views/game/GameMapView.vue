@@ -33,7 +33,7 @@ let audioContext = null
 
 const phase = computed(() => state.value?.phase ?? 'hiding')
 const players = computed(() => state.value?.players ?? [])
-const humanCat = computed(() =>
+const humanPlayer = computed(() =>
   players.value.find((player) => player.controller === 'human')
 )
 const mice = computed(() => players.value.filter((player) => player.role === 'mouse'))
@@ -45,22 +45,28 @@ const timeLeft = computed(() => {
     : state.value.chasingTimeLeft
   return Math.max(0, Math.ceil(remaining))
 })
-const nearestMouse = computed(() => {
-  if (!humanCat.value || mice.value.length === 0) return null
-  return mice.value
-    .map((mouse) => ({
-      mouse,
-      distance: calcDistance(humanCat.value.position, mouse.position)
+const nearestOpponent = computed(() => {
+  if (!humanPlayer.value) return null
+  const opponents = humanPlayer.value.role === 'cat' ? mice.value : cats.value
+  return opponents
+    .filter((player) => player.id !== humanPlayer.value.id)
+    .map((player) => ({
+      player,
+      distance: calcDistance(humanPlayer.value.position, player.position)
     }))
     .sort((left, right) => left.distance - right.distance)[0]
 })
-const nearestMouseDistance = computed(() =>
-  nearestMouse.value ? nearestMouse.value.distance.toFixed(1) : '0.0'
+const nearestOpponentDistance = computed(() =>
+  nearestOpponent.value ? nearestOpponent.value.distance.toFixed(1) : '0.0'
+)
+const playerCanMove = computed(() =>
+  phase.value === 'chasing' ||
+  (phase.value === 'hiding' && humanPlayer.value?.role === 'mouse')
 )
 const threatLevel = computed(() => {
-  if (phase.value !== 'chasing' || !nearestMouse.value) return 'standby'
-  if (nearestMouse.value.distance <= state.value.config.catchThreshold * 2) return 'danger'
-  if (nearestMouse.value.distance <= 80) return 'near'
+  if (phase.value !== 'chasing' || !nearestOpponent.value) return 'standby'
+  if (nearestOpponent.value.distance <= state.value.config.catchThreshold * 2) return 'danger'
+  if (nearestOpponent.value.distance <= 160) return 'near'
   return 'tracking'
 })
 const recentEvents = computed(() => (state.value?.events ?? [])
@@ -156,7 +162,7 @@ function onKeyUp(event) {
 
 function holdDirection(x, y, event) {
   event?.preventDefault()
-  if (phase.value !== 'chasing') return
+  if (!playerCanMove.value) return
   unlockAudio()
   touchInput.value = { x, y }
 }
@@ -232,14 +238,20 @@ onBeforeUnmount(() => {
 watch(() => state.value?.eventSequence ?? 0, (current, previous = 0) => {
   const newEvents = (state.value?.events ?? []).filter((event) => event.id > previous)
   if (newEvents.some((event) => event.type === 'capture-confirmed')) {
-    showFeedback('抓捕成功，电脑鼠已加入猫阵营')
+    const humanId = humanPlayer.value?.id
+    const humanConverted = newEvents.some((event) =>
+      event.type === 'role-converted' && event.playerId === humanId
+    )
+    showFeedback(humanConverted ? '你被抓到了，已转换为猫阵营！' : '抓捕成功，老鼠已加入猫阵营')
     playFeedback('capture')
   }
 })
 
 watch(phase, (current, previous) => {
   if (current === 'chasing' && previous === 'hiding') {
-    showFeedback('追捕开始 · 自由选择附近老鼠')
+    showFeedback(humanPlayer.value?.role === 'mouse'
+      ? '追捕开始 · 躲开 AI 猫'
+      : '追捕开始 · 自由选择附近老鼠')
     playFeedback('chase')
   }
 })
@@ -284,19 +296,25 @@ watch(threatLevel, (current, previous) => {
           <div class="status-grid">
             <div><span>存活鼠</span><strong>{{ mice.length }}</strong></div>
             <div><span>猫阵营</span><strong>{{ cats.length }}</strong></div>
-            <div><span>最近老鼠</span><strong>{{ nearestMouseDistance }}<small>m</small></strong></div>
-            <div><span>你的抓捕</span><strong>{{ humanCat?.captures ?? 0 }}</strong></div>
+            <div><span>最近{{ humanPlayer?.role === 'cat' ? '老鼠' : '猫' }}</span><strong>{{ nearestOpponentDistance }}<small>m</small></strong></div>
+            <div><span>你的身份</span><strong>{{ humanPlayer?.role === 'cat' ? '猫' : '鼠' }}</strong></div>
           </div>
 
           <div v-if="hudExpanded" class="hud-details">
             <div class="target-card" :class="threatLevel">
               <span class="card-kicker">追踪态势</span>
-              <strong v-if="phase === 'hiding'">等待追捕开始</strong>
-              <strong v-else-if="nearestMouse">
-                {{ threatLevel === 'danger' ? '已有老鼠进入抓捕距离' : threatLevel === 'near' ? '附近发现电脑鼠' : '自由追逐任意老鼠' }}
+              <strong v-if="phase === 'hiding'">{{ humanPlayer?.role === 'mouse' ? '利用 5 秒提前躲藏' : '等待追捕开始' }}</strong>
+              <strong v-else-if="nearestOpponent">
+                <template v-if="humanPlayer?.role === 'cat'">
+                  {{ threatLevel === 'danger' ? '已有老鼠进入抓捕距离' : threatLevel === 'near' ? '附近发现电脑鼠' : '自由追逐任意老鼠' }}
+                </template>
+                <template v-else>
+                  {{ threatLevel === 'danger' ? '危险：AI 猫已经逼近' : threatLevel === 'near' ? 'AI 猫正在附近追踪' : '保持移动，远离 AI 猫' }}
+                </template>
               </strong>
-              <strong v-else>全部目标已清除</strong>
-              <p>靠近任意老鼠至 {{ state.config.catchThreshold }}m 内，只转换距离最近的一只。</p>
+              <strong v-else>{{ humanPlayer?.role === 'cat' ? '全部目标已清除' : '暂未发现猫' }}</strong>
+              <p v-if="humanPlayer?.role === 'cat'">靠近任意老鼠至 {{ state.config.catchThreshold }}m 内，只转换距离最近的一只。</p>
+              <p v-else>与猫距离小于等于 {{ state.config.catchThreshold }}m 时会被抓，随后转为玩家猫继续比赛。</p>
             </div>
 
             <div v-if="recentEvents.length" class="event-feed" aria-label="赛事事件">
@@ -311,8 +329,8 @@ watch(threatLevel, (current, previous) => {
         </aside>
 
         <section class="movement-deck" aria-label="持续移动控制">
-          <span>{{ phase === 'hiding' ? '等待躲藏结束' : '按住移动' }}</span>
-          <div class="dpad" :class="{ disabled: phase !== 'chasing' }">
+          <span>{{ playerCanMove ? '按住移动' : '等待躲藏结束' }}</span>
+          <div class="dpad" :class="{ disabled: !playerCanMove }">
             <button @pointerdown="holdDirection(0, -1, $event)" aria-label="向上">↑</button>
             <div>
               <button @pointerdown="holdDirection(-1, 0, $event)" aria-label="向左">←</button>

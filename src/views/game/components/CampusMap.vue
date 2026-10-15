@@ -237,7 +237,9 @@ function applyMarkerAppearance(element, player) {
           : ''
   element.setAttribute(
     'aria-label',
-    player.controller === 'human' ? '玩家猫' : player.role === 'cat' ? '电脑猫' : '电脑鼠'
+    player.controller === 'human'
+      ? `玩家${player.role === 'cat' ? '猫' : '鼠'}`
+      : player.role === 'cat' ? '电脑猫' : '电脑鼠'
   )
 }
 
