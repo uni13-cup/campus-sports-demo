@@ -1,8 +1,8 @@
 # 校园猫鼠大作战 3.0 开发计划
 
-> 负责人：张慧雯  
-> 开发分支：`codex/catmouse-v3-dual-role`  
-> 基线：`origin/master@f020bbe`  
+> 负责人：张慧雯
+> 开发分支：`codex/catmouse-v3-dual-role`
+> 基线：`origin/master@f020bbe`
 > 定位声明：本版本仍是单机模拟定位 Demo，不接入真实 GPS、后端或多人联机。
 
 ## 一、基线审查
