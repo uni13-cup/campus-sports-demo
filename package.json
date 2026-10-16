@@ -8,6 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:game": "node --test src/game/*.test.js",
+    "server": "node server/src/server.js",
+    "test:server": "node server/smoke-test.mjs",
     "verify:game": "node scripts/verify-campus-map.mjs http://127.0.0.1:4173/game/play"
   },
   "dependencies": {

@@ -1,0 +1,19 @@
+{
+  "name": "campus-sports-demo-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "趣跑校园后端接口（课程演示版：Express + 内存种子数据，零数据库依赖）",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node smoke-test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}
