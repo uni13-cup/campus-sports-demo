@@ -33,14 +33,17 @@ let timerId = null
 export function initGame(opts = {}) {
   clearTimer()
   const cfg = { ...GAME_CONFIG, ...opts }
+  const initialHumanRole = cfg.humanRole === 'mouse' ? 'mouse' : 'cat'
   state = {
     phase: 'hiding',
-    players: createPlayers(cfg),
+    initialHumanRole,
+    players: createPlayers({ ...cfg, humanRole: initialHumanRole }),
     hidingTimeLeft: cfg.hidingDuration,
     chasingTimeLeft: cfg.chasingDuration,
     winner: null,
     endReason: null,
     captureContactMouseIds: [],
+    captureContactKeys: [],
     config: {
       mapWidth: cfg.mapWidth,
       mapHeight: cfg.mapHeight,
@@ -184,8 +187,9 @@ export function checkCaptures(gameState) {
   const captures = []
   if (nextState.phase !== 'chasing') return { state: nextState, captures }
 
-  const cats = nextState.players.filter(
-    (player) => player.role === 'cat' && player.controller === 'human'
+  const cats = nextState.players.filter((player) =>
+    player.role === 'cat' &&
+    (nextState.initialHumanRole === 'mouse' || player.controller === 'human')
   )
   const mice = nextState.players.filter((player) => player.role === 'mouse')
 
@@ -197,11 +201,19 @@ export function checkCaptures(gameState) {
     })))
     .filter(({ distance }) => distance <= nextState.config.catchThreshold)
     .sort((left, right) => left.distance - right.distance)
-  const previousContacts = new Set(nextState.captureContactMouseIds ?? [])
+  const previousContacts = new Set(
+    nextState.captureContactKeys ??
+    (nextState.captureContactMouseIds ?? []).map((mouseId) => `cat-1|${mouseId}`)
+  )
+  nextState.captureContactKeys = [...new Set(
+    candidates.map(({ cat, mouse }) => `${cat.id}|${mouse.id}`)
+  )]
   nextState.captureContactMouseIds = [...new Set(
     candidates.map(({ mouse }) => mouse.id)
   )]
-  const catcher = candidates.find(({ mouse }) => !previousContacts.has(mouse.id))
+  const catcher = candidates.find(({ cat, mouse }) =>
+    !previousContacts.has(`${cat.id}|${mouse.id}`)
+  )
 
   if (catcher) {
     const mutableMouse = nextState.players.find((player) => player.id === catcher.mouse.id)
@@ -209,7 +221,6 @@ export function checkCaptures(gameState) {
       (player) => player.id === catcher.cat.id
     )
     mutableMouse.role = 'cat'
-    mutableMouse.controller = 'ai'
     mutableMouse.capturedAt = nextState.chasingTimeLeft
     mutableMouse.captures = 0
     mutableCat.captures = (mutableCat.captures ?? 0) + 1
@@ -355,11 +366,12 @@ function clamp(v, min, max) {
 
 function createPlayers(cfg) {
   const catSpawn = cfg.spawnPoints.cat
+  const humanIsMouse = cfg.humanRole === 'mouse'
   const players = [
     {
       id: 'cat-1',
       role: 'cat',
-      controller: 'human',
+      controller: humanIsMouse ? 'ai' : 'human',
       position: { x: catSpawn.x, y: catSpawn.y },
       captures: 0
     }
@@ -371,7 +383,7 @@ function createPlayers(cfg) {
     players.push({
       id: `mouse-${index + 1}`,
       role: 'mouse',
-      controller: 'ai',
+      controller: humanIsMouse && index === 0 ? 'human' : 'ai',
       position: { x: spawn.x, y: spawn.y },
       capturedAt: null
     })

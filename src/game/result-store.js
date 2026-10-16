@@ -3,7 +3,7 @@ export const RESULT_TTL_MS = 2 * 60 * 60 * 1000
 
 export function createResultSnapshot(gameState, now = Date.now()) {
   return {
-    version: 2,
+    version: 3,
     savedAt: now,
     expiresAt: now + RESULT_TTL_MS,
     phase: gameState.phase,
@@ -11,6 +11,7 @@ export function createResultSnapshot(gameState, now = Date.now()) {
     endReason: gameState.endReason,
     hidingTimeLeft: gameState.hidingTimeLeft,
     chasingTimeLeft: gameState.chasingTimeLeft,
+    initialHumanRole: gameState.initialHumanRole ?? 'cat',
     events: (gameState.events ?? [])
       .filter((event) => ['capture-confirmed', 'role-converted', 'game-ended'].includes(event.type))
       .slice(-8)
@@ -37,11 +38,14 @@ export function loadGameResult(storage = getSessionStorage(), now = Date.now()) 
     const raw = storage.getItem(RESULT_STORAGE_KEY)
     if (!raw) return null
     const result = JSON.parse(raw)
-    if (result.version !== 2 || result.expiresAt <= now || !Array.isArray(result.players)) {
+    if (![2, 3].includes(result.version) || result.expiresAt <= now || !Array.isArray(result.players)) {
       storage.removeItem(RESULT_STORAGE_KEY)
       return null
     }
-    return result
+    return {
+      ...result,
+      initialHumanRole: result.initialHumanRole ?? 'cat'
+    }
   } catch {
     storage.removeItem(RESULT_STORAGE_KEY)
     return null

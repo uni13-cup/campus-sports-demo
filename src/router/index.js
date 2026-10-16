@@ -40,12 +40,24 @@ const routes = [
     component: () => import('@/views/home/HomeView.vue'),
     meta: { title: '校园运动平台' }
   },
-  // —— 校园猫鼠大作战 v2（仅保留对战页，入口在趣味玩法） ——
+  // —— 校园猫鼠大作战 v3（独立大厅与对战页） ——
+  {
+    path: '/game',
+    name: 'game-lobby',
+    component: () => import('@/views/game/GameLobbyView.vue'),
+    meta: { title: '猫鼠大作战 · 游戏大厅' }
+  },
   {
     path: '/game/play',
     name: 'game-play',
     component: () => import('@/views/game/GameMapView.vue'),
     meta: { title: '猫鼠大作战 · 对战' }
+  },
+  {
+    path: '/game/result',
+    name: 'game-result',
+    component: () => import('@/views/game/GameResultView.vue'),
+    meta: { title: '猫鼠大作战 · 结算' }
   },
   // —— 四个轻量功能展示页 ——
   {
@@ -87,7 +99,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
   scrollBehavior() {
     return { top: 0 }

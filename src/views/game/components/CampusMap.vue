@@ -12,6 +12,7 @@ import mapLibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?url'
 import { CAMPUS_MAP_SOURCE_URL } from '@/game/campus.js'
 import { gameToLngLat, geoBoundsToMapLibre } from '@/game/coordinates.js'
 import { CAMPUS_DATA_META, CAMPUS_SCENE } from '@/game/data/campus-data.js'
+import { CAMPUS_LANDMARKS } from '@/game/landmarks.js'
 
 setWorkerUrl(mapLibreWorkerUrl)
 
@@ -30,11 +31,28 @@ const performanceMode = ref(false)
 const showCollision = ref(false)
 const mapReady = ref(false)
 const markers = new Map()
+const landmarkMarkers = new Map()
 const previousPositions = new Map()
 const trailHistories = new Map()
 let map = null
 let programmaticMove = false
 let lastCameraUpdate = 0
+
+function addLandmarkMarkers() {
+  if (!map) return
+  for (const landmark of CAMPUS_LANDMARKS) {
+    if (landmarkMarkers.has(landmark.id)) continue
+    const element = document.createElement('div')
+    element.className = 'campus-landmark'
+    element.textContent = landmark.name
+    element.setAttribute('aria-label', `OSM地标：${landmark.name}`)
+    element.dataset.osmId = landmark.osmId
+    const marker = new Marker({ element, anchor: 'bottom' })
+      .setLngLat(landmark.position)
+      .addTo(map)
+    landmarkMarkers.set(landmark.id, marker)
+  }
+}
 
 function emptyFeatureCollection() {
   return { type: 'FeatureCollection', features: [] }
@@ -88,11 +106,11 @@ function createStyle() {
       trails: { type: 'geojson', data: emptyFeatureCollection() }
     },
     layers: [
-      { id: 'offline-base', type: 'background', paint: { 'background-color': '#cbdacb' } },
+      { id: 'offline-base', type: 'background', paint: { 'background-color': '#c7d9ce' } },
       {
         id: 'campus-area', type: 'fill', source: 'campus',
         filter: ['==', ['get', 'kind'], 'campus'],
-        paint: { 'fill-color': '#dce7d8', 'fill-opacity': 0.88 }
+        paint: { 'fill-color': '#d9e8dc', 'fill-opacity': 0.92 }
       },
       {
         id: 'leisure-area', type: 'fill', source: 'campus',
@@ -122,7 +140,7 @@ function createStyle() {
         id: 'campus-roads-casing', type: 'line', source: 'campus',
         filter: ['==', ['get', 'kind'], 'road'],
         paint: {
-          'line-color': '#8c958d',
+          'line-color': '#87958c',
           'line-width': ['interpolate', ['linear'], ['zoom'], 15, 5, 18, 11],
           'line-opacity': 0.72
         }
@@ -131,7 +149,7 @@ function createStyle() {
         id: 'campus-roads', type: 'line', source: 'campus',
         filter: ['==', ['get', 'kind'], 'road'],
         paint: {
-          'line-color': '#f6f1df',
+          'line-color': '#fff9e9',
           'line-width': ['interpolate', ['linear'], ['zoom'], 15, 3, 18, 7.2],
           'line-opacity': 1
         }
@@ -139,7 +157,7 @@ function createStyle() {
       {
         id: 'campus-buildings-shadow', type: 'fill', source: 'campus',
         filter: ['==', ['get', 'kind'], 'building'],
-        paint: { 'fill-color': '#263c35', 'fill-translate': [3, 5], 'fill-opacity': 0.25 }
+        paint: { 'fill-color': '#263c35', 'fill-translate': [3, 5], 'fill-opacity': 0.22 }
       },
       {
         id: 'campus-buildings-flat', type: 'fill', source: 'campus',
@@ -151,7 +169,7 @@ function createStyle() {
         id: 'campus-buildings-3d', type: 'fill-extrusion', source: 'campus',
         filter: ['==', ['get', 'kind'], 'building'],
         paint: {
-          'fill-extrusion-color': '#d8d0c3',
+          'fill-extrusion-color': '#d9d3c8',
           'fill-extrusion-height': 16,
           'fill-extrusion-base': 0,
           'fill-extrusion-opacity': 0.96,
@@ -199,15 +217,22 @@ function markerElement(player) {
 }
 
 function applyMarkerAppearance(element, player) {
-  const converted = player.role === 'cat' && player.controller === 'ai'
+  const previousRole = element.dataset.role
+  const converted = player.role === 'cat' && player.capturedAt !== null && player.capturedAt !== undefined
   const isCandidate = props.captureCandidate?.mouseId === player.id
+  if (previousRole === 'mouse' && player.role === 'cat') {
+    element.dataset.convertingUntil = String(Date.now() + 900)
+  }
+  const conversionActive = Number(element.dataset.convertingUntil ?? 0) > Date.now()
   element.className = [
     'campus-role-marker',
     `is-${player.role}`,
     player.controller === 'human' ? 'is-human' : 'is-ai',
     converted ? 'is-converted' : '',
-    isCandidate ? 'is-candidate' : ''
+    isCandidate ? 'is-candidate' : '',
+    conversionActive ? 'just-converted' : ''
   ].filter(Boolean).join(' ')
+  element.dataset.role = player.role
   element.querySelector('.marker-face').textContent = player.role === 'cat' ? '🐱' : '🐭'
   element.querySelector('.marker-label').textContent =
     player.controller === 'human'
@@ -219,7 +244,9 @@ function applyMarkerAppearance(element, player) {
           : ''
   element.setAttribute(
     'aria-label',
-    player.controller === 'human' ? '玩家猫' : player.role === 'cat' ? '电脑猫' : '电脑鼠'
+    player.controller === 'human'
+      ? `玩家${player.role === 'cat' ? '猫' : '鼠'}`
+      : player.role === 'cat' ? '电脑猫' : '电脑鼠'
   )
 }
 
@@ -326,8 +353,8 @@ function fitActivity() {
   map.fitBounds(geoBoundsToMapLibre(props.config.geoBounds), {
     padding: 44,
     duration: 650,
-    pitch: visualPreset.value === 'immersive' && !performanceMode.value ? 42 : 0,
-    bearing: visualPreset.value === 'immersive' && !performanceMode.value ? -10 : 0,
+    pitch: visualPreset.value === 'immersive' && !performanceMode.value ? 38 : 0,
+    bearing: visualPreset.value === 'immersive' && !performanceMode.value ? -8 : 0,
     essential: true
   })
   window.setTimeout(() => { programmaticMove = false }, 700)
@@ -339,7 +366,7 @@ function applyVisualMode() {
   map.setLayoutProperty('campus-buildings-3d', 'visibility', immersive ? 'visible' : 'none')
   map.setLayoutProperty('campus-buildings-flat', 'visibility', immersive ? 'none' : 'visible')
   map.setLayoutProperty('trails-layer', 'visibility', performanceMode.value ? 'none' : 'visible')
-  map.easeTo({ pitch: immersive ? 42 : 0, bearing: immersive ? -10 : 0, duration: 500, essential: true })
+  map.easeTo({ pitch: immersive ? 38 : 0, bearing: immersive ? -8 : 0, duration: 500, essential: true })
   updateMarkers()
 }
 
@@ -365,12 +392,12 @@ onMounted(() => {
     container: mapContainer.value,
     style: createStyle(),
     bounds: geoBoundsToMapLibre(props.config.geoBounds),
-    fitBoundsOptions: { padding: 44 },
+    fitBoundsOptions: { padding: 58 },
     maxBounds: geoBoundsToMapLibre(props.config.geoBounds),
     minZoom: 15.4,
     maxZoom: 20,
-    pitch: 42,
-    bearing: -10,
+    pitch: 38,
+    bearing: -8,
     maxPitch: 65,
     attributionControl: false
   })
@@ -386,6 +413,7 @@ onMounted(() => {
   }))
   map.on('load', () => {
     mapReady.value = true
+    addLandmarkMarkers()
     updateMarkers()
     emit('ready')
   })
@@ -406,6 +434,8 @@ watch(
 onBeforeUnmount(() => {
   for (const marker of markers.values()) marker.remove()
   markers.clear()
+  for (const marker of landmarkMarkers.values()) marker.remove()
+  landmarkMarkers.clear()
   trailHistories.clear()
   map?.remove()
   delete window.__campusMap
@@ -479,6 +509,20 @@ onBeforeUnmount(() => {
 .campus-map-canvas .maplibregl-ctrl-group button { filter: invert(1); }
 .campus-map-canvas .maplibregl-ctrl-attrib { color: #496257; font-size: 10px; }
 
+.campus-landmark {
+  padding: 4px 8px;
+  border: 1px solid rgba(34, 72, 57, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #244f3d;
+  box-shadow: 0 4px 12px rgba(26, 62, 47, 0.16);
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .campus-role-marker {
   --heading: 0deg;
   position: relative;
@@ -546,6 +590,8 @@ onBeforeUnmount(() => {
 .campus-role-marker.is-human .marker-ring { border-color: rgba(255, 77, 56, 0.5); opacity: 1; animation: marker-pulse 1.6s ease-out infinite; }
 .campus-role-marker.is-converted { background: #ab8cf3; }
 .campus-role-marker.is-converted .marker-direction { color: #6848bb; }
+.campus-role-marker.just-converted { z-index: 7; animation: role-convert .85s cubic-bezier(.18,.8,.24,1); }
+.campus-role-marker.just-converted .marker-ring { border-color: #ffd559; opacity: 1; animation: conversion-ring .85s ease-out; }
 .campus-role-marker.is-candidate { background: #ff7c62; }
 .campus-role-marker.is-candidate .marker-face { transform: scale(1.12); }
 .campus-role-marker.is-candidate .marker-ring { border-color: #ff5a47; opacity: 1; animation: candidate-pulse 0.72s ease-out infinite; }
@@ -617,6 +663,15 @@ onBeforeUnmount(() => {
   0% { transform: scale(0.92); opacity: 1; }
   100% { transform: scale(1.8); opacity: 0; }
 }
+@keyframes role-convert {
+  0% { transform: scale(.72) rotate(-18deg); }
+  55% { transform: scale(1.34) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes conversion-ring {
+  from { transform: scale(.7); opacity: 1; }
+  to { transform: scale(2.1); opacity: 0; }
+}
 @media (max-width: 700px) {
   .map-status { max-width: calc(100% - 70px); }
   .map-status span:nth-child(2), .map-status span:nth-child(4) { display: none; }
@@ -627,6 +682,7 @@ onBeforeUnmount(() => {
   .campus-role-marker { width: 35px; height: 35px; }
   .campus-role-marker .marker-face { font-size: 20px; }
   .campus-role-marker.is-human { width: 43px; height: 43px; }
+  .campus-landmark { padding: 3px 6px; font-size: 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .campus-role-marker, .campus-role-marker .marker-direction, .campus-role-marker .marker-ring {

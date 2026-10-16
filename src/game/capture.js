@@ -58,7 +58,6 @@ export function confirmCapture(gameState, mouseId, catId = null) {
   if (distance > allowedDistance) return nextState
 
   mouse.role = 'cat'
-  mouse.controller = 'ai'
   mouse.capturedAt = nextState.chasingTimeLeft
   mouse.captures = 0
   cat.captures = (cat.captures ?? 0) + 1
