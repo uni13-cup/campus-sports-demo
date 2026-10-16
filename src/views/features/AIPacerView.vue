@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, reactive, ref } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 // 真实数据连接：复用核验模块的传感器管线（加速度→步频→速度→真实里程，判定通过才累计）
 import { HZ, WIN, DT, analyze, classify, speedFromCadence } from '../../verify/analyzer'
@@ -284,14 +284,135 @@ function lineOf(char, key, data) {
   return line
 }
 
-function speak(text) {
-  if (!voiceOn.value || !('speechSynthesis' in window)) return
-  window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = 'zh-CN'
-  u.rate = 1.05
-  window.speechSynthesis.speak(u)
+// ================= 跨系统语音播报 =================
+// 常见「没声音」原因与对应处理：
+//   1. 语音列表异步加载，取不到中文音色 → 监听 voiceschanged 并动态挑选
+//   2. 部分安卓/国产浏览器要求首次播报发生在用户手势内 → 在手势里 unlockAudio 预热
+//   3. 语句对象被引擎回收导致无声 → 用 curUtt 持有引用
+//   4. 引擎处于 paused 状态 → 播报前 resume()
+//   5. 设备无语音引擎 / 播报失败 → 用 Web Audio 发一声提示音兜底
+const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
+let voices = []
+let primed = false
+let curUtt = null
+let audioCtx = null
+let speakSeq = 0
+
+function loadVoices() {
+  const list = (synth && synth.getVoices()) || []
+  if (list.length) voices = list
 }
+if (synth) {
+  loadVoices()
+  synth.onvoiceschanged = loadVoices // 用属性赋值，避免重复挂监听
+}
+
+// 挑一个中文音色；找不到就交给系统默认音色
+function pickVoice() {
+  if (!voices.length) loadVoices()
+  if (!voices.length) return null
+  const zh = voices.filter((v) => /zh|cmn|chinese|普通话|中文/i.test(`${v.lang} ${v.name}`))
+  const pool = zh.length ? zh : voices
+  return pool.find((v) => v.localService) || pool[0] || null
+}
+
+// 兜底提示音：没有语音引擎时也能「出声」
+function beep() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (!AC) return
+    if (!audioCtx) audioCtx = new AC()
+    if (audioCtx.state === 'suspended') audioCtx.resume()
+    const t = audioCtx.currentTime
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(880, t)
+    gain.gain.setValueAtTime(0.0001, t)
+    gain.gain.exponentialRampToValueAtTime(0.16, t + 0.02)
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26)
+    osc.connect(gain)
+    gain.connect(audioCtx.destination)
+    osc.start(t)
+    osc.stop(t + 0.3)
+  } catch {
+    /* 忽略：极端情况下静默 */
+  }
+}
+
+// 在用户手势内解锁音频：恢复合成引擎并播一条静音短句，同时解锁 Web Audio
+function unlockAudio() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext
+    if (AC) {
+      if (!audioCtx) audioCtx = new AC()
+      if (audioCtx.state === 'suspended') audioCtx.resume()
+    }
+  } catch {
+    /* 忽略 */
+  }
+  if (!synth || primed) return
+  primed = true
+  try {
+    synth.resume()
+    const u = new SpeechSynthesisUtterance('')
+    u.volume = 0
+    u.lang = 'zh-CN'
+    synth.speak(u)
+  } catch {
+    /* 忽略 */
+  }
+}
+
+function stopSpeech() {
+  try {
+    if (synth) synth.cancel()
+  } catch {
+    /* 忽略 */
+  }
+}
+
+function speak(text) {
+  if (!voiceOn.value || !text) return
+  if (!synth) { beep(); return } // 无语音合成能力 → 提示音
+  try {
+    unlockAudio()
+    const busy = synth.speaking || synth.pending
+    if (busy) synth.cancel()
+    const seq = ++speakSeq
+    const go = () => {
+      if (seq !== speakSeq) return // 期间又来了新播报，放弃本条
+      if (synth.paused) synth.resume()
+      const u = new SpeechSynthesisUtterance(text)
+      const v = pickVoice()
+      if (v) u.voice = v
+      u.lang = (v && v.lang) || 'zh-CN'
+      u.rate = 1.05
+      u.pitch = 1
+      u.volume = 1
+      let started = false
+      u.onstart = () => { started = true }
+      u.onerror = () => { if (!started && seq === speakSeq) beep() }
+      curUtt = u // 持有引用，避免被回收
+      synth.speak(u)
+      // 个别引擎会静默失败：既不触发 onstart 也不报错，此时补一声提示音
+      setTimeout(() => {
+        if (!started && !synth.speaking && seq === speakSeq) beep()
+      }, 1500)
+    }
+    // cancel 后立即 speak 会被部分安卓浏览器吞掉，留一点间隔
+    if (busy) setTimeout(go, 90)
+    else go()
+  } catch {
+    beep()
+  }
+}
+
+// 开启语音开关时预热音频（在用户手势内完成，兼容需手势解锁的安卓浏览器）
+watch(voiceOn, (on) => {
+  if (on) unlockAudio()
+  else stopSpeech()
+})
 
 function pushFeed(text, mood = 'start') {
   feed.value.push({
@@ -318,7 +439,8 @@ function pushUser(text) {
 
 function selectChar(c) {
   activeChar.value = c
-  window.speechSynthesis?.cancel()
+  stopSpeech()
+  unlockAudio() // 点击角色属于用户手势：借此解锁音频，兼容需手势的安卓浏览器
   pushFeed(lineOf(c, 'start'), 'start')
 }
 
@@ -369,7 +491,7 @@ function ask(kind) {
 }
 
 function reset() {
-  window.speechSynthesis?.cancel()
+  stopSpeech()
   stopLive()
   feed.value = []
   segments.value = []
